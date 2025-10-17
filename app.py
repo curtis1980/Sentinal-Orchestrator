@@ -119,4 +119,5 @@ if st.button("🚀 Run Agent"):
         run_agent(agent, query)
 
 # --- Follow-up + Next Agent ---
-if st.session_state.last_agent and st.session_state.last_response
+if st.session_state.last_agent and st.session_state.last_response:
+
