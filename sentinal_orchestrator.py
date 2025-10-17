@@ -23,15 +23,16 @@ def call_agent(agent, query):
     """Call an AI agent with a query."""
     print(f"\n🧠 Routing to agent: {agent.upper()}...\n")
 
-    # Create chat completion using new API
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": f"You are {agent}. {AGENTS.get(agent, '')}"},
-            {"role": "user", "content": query}
-        ],
-        temperature=0.3
-    )
+   # Create chat completion using new API
+response = openai.ChatCompletion.create(
+    model=MODEL,
+    messages=[
+        {"role": "system", "content": f"You are {agent}. {AGENTS.get(agent, '')}"},
+        {"role": "user", "content": query},
+    ],
+    temperature=0.3
+)
+
 
     # Extract and return the model's response
     answer = response.choices[0].message.content
@@ -62,5 +63,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
