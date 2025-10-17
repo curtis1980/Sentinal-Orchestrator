@@ -27,8 +27,15 @@ def call_agent(agent, query):
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": f"You are {agent}. {AGENTS.ge
+            {"role": "system", "content": f"You are {agent}. {AGENTS.get(agent, '')}"},
+            {"role": "user", "content": query},
+        ],
+        temperature=0.3
+    )
 
+    result = response.choices[0].message.content
+    print(result)
+    return result
 
 
 def main():
@@ -55,6 +62,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
 
 
 
