@@ -1,13 +1,13 @@
 import os
+from openai import OpenAI
 from dotenv import load_dotenv
-import openai
 import sys
 
 # ✅ Load environment variables from .env file
 load_dotenv()
 
-# ✅ Set up OpenAI API key (works with openai==1.3.7)
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# ✅ Set up OpenAI client (works with the new SDK, e.g., openai>=1.0)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 # ✅ Define your agents and their basic purposes
@@ -23,20 +23,12 @@ def call_agent(agent, query):
     """Call an AI agent with a query."""
     print(f"\n🤖 Routing to agent: {agent.upper()}...\n")
 
-    # Create chat completion using new API
-    response = openai.ChatCompletion.create(
+    # ✅ Use the new chat completions API
+    response = client.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": f"You are {agent}. {AGENTS.get(agent, '')}"},
-            {"role": "user", "content": query},
-        ],
-        temperature=0.3
-    )
+            {"role": "system", "content": f"You are {agent}. {AGENTS.ge
 
-
-    # Extract and return the model's response
-    answer = response.choices[0].message.content
-    return answer
 
 
 def main():
@@ -63,6 +55,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
