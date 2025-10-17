@@ -7,7 +7,7 @@ import sys
 load_dotenv()
 
 # ✅ Set up OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI()
 MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 # ✅ Define your agents and their basic purposes
@@ -62,3 +62,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
