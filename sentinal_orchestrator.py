@@ -7,7 +7,9 @@ import sys
 load_dotenv()
 
 # ✅ Set up OpenAI client (works with the new SDK, e.g., openai>=1.0)
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from openai import OpenAI
+client = OpenAI()
+
 MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 # ✅ Define your agents and their basic purposes
@@ -62,6 +64,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
