@@ -6,7 +6,7 @@ import sys
 # ✅ Load environment variables from .env file
 load_dotenv()
 
-# ✅ Set up OpenAI client (works with openai==1.3.7)
+# ✅ Set up OpenAI API key (works with openai==1.3.7)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
@@ -21,17 +21,17 @@ AGENTS = {
 
 def call_agent(agent, query):
     """Call an AI agent with a query."""
-    print(f"\n🧠 Routing to agent: {agent.upper()}...\n")
+    print(f"\n🤖 Routing to agent: {agent.upper()}...\n")
 
-   # Create chat completion using new API
-response = openai.ChatCompletion.create(
-    model=MODEL,
-    messages=[
-        {"role": "system", "content": f"You are {agent}. {AGENTS.get(agent, '')}"},
-        {"role": "user", "content": query},
-    ],
-    temperature=0.3
-)
+    # Create chat completion using new API
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": f"You are {agent}. {AGENTS.get(agent, '')}"},
+            {"role": "user", "content": query},
+        ],
+        temperature=0.3
+    )
 
 
     # Extract and return the model's response
@@ -63,6 +63,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
