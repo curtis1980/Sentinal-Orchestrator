@@ -81,7 +81,7 @@ def load_logo(path: str):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-logo_base64 = load_logo("Longbow-Capital_Logo.png")
+logo_base64 = load_logo(os.path.join(os.path.dirname(__file__), "Longbow-Capital_Logo.png"))
 
 st.markdown(f"""
 <div class="sentinel-header" style="display:flex;align-items:center;justify-content:space-between;">
@@ -218,3 +218,4 @@ with col2:
             st.success("✅ Ready for a fresh search!")
             time.sleep(0.5)
             st.experimental_rerun()
+
