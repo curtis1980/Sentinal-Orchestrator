@@ -1,21 +1,31 @@
-# app.py – Sentinel v1.3 (enterprise build)
-# -----------------------------------------
-# Features:
-# - Multi-file PDF/DOCX upload (3×10 MB)
-# - OCR fallback (pdf2image + pytesseract) with safe guards
-# - Chat-style UI with static input
-# - Resilient subprocess orchestration
-# - Export + reset + telemetry sidebar
+# app.py — Sentinel v1.5 (Command Center UI)
+# ------------------------------------------
+# UX:
+# - Solid matte background (#121212), Longbow red accent (#E63946)
+# - Static header "SENTINEL" with animated underline shimmer
+# - "ACTIVE AGENT: <name>  •  🔴" with subtle pulse
+# - Scrollable chat container (last 10 messages), fade-in bubbles
+# - Fixed footer: input + Ask Agent + Send to NEXT
+#
+# Functionality:
+# - Multi-file upload (PDF/DOCX up to 3 × 10 MB)
+# - PDF text → OCR fallback (pdf2image + pytesseract), safe if libs missing
+# - Context injection (~10k chars), retries (3) + timeout (60s) for agent calls
+# - Session reset
 
-import os, io, time, base64, subprocess
+import io
+import time
+import subprocess
 from datetime import datetime
-from typing import List, Tuple
 
 import streamlit as st
-from docx import Document
-import pdfplumber
 
-# Optional OCR libs (safe import)
+# Optional parsers (safe imports)
+try:
+    import pdfplumber
+except Exception:
+    pdfplumber = None
+
 try:
     from pdf2image import convert_from_bytes
     import pytesseract
@@ -23,235 +33,331 @@ try:
 except Exception:
     OCR_AVAILABLE = False
 
+from docx import Document
 
-# ---------- Streamlit Config ----------
-st.set_page_config(page_title="Sentinel | AI Orchestrator", layout="wide")
+# -------------------- PAGE CONFIG --------------------
+st.set_page_config(page_title="Sentinel", layout="wide")
 
+# -------------------- THEME / CSS --------------------
+# Solid matte background + command-center polish
 st.markdown("""
 <style>
-body { background:#0E0E0E; color:#E5E5E5; font-family:'Inter',sans-serif; }
-.sentinel-title{font-size:36px;font-weight:800;color:#F5F5F5;}
-.sentinel-sub{font-size:15px;color:#C0C0C0;}
-.divider{border-bottom:1px solid #333;margin:18px 0 28px 0;}
-.chat-bubble{background:#181818;border-left:4px solid #E74C3C;
-  padding:12px;border-radius:10px;margin:8px 0;}
-.static-input{position:fixed;bottom:0;left:0;right:0;
-  background:#0E0E0E;padding:10px 20px;border-top:1px solid #222;}
+:root {
+  --bg: #121212;
+  --surface: #171A1F;
+  --card: #1C2129;
+  --text: #F5F5F5;
+  --muted: #B8BEC6;
+  --accent: #E63946;
+  --border: #2B3038;
+}
+
+html, body, [class*="css"] {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+.block-container { padding-top: 1.2rem; padding-bottom: 7.2rem; }
+
+/* Header */
+.s-header { text-align:center; margin-top:-4px; margin-bottom:12px; }
+.s-title  { font-size: 44px; letter-spacing: 2px; font-weight: 900; }
+.s-underline {
+  width: 160px; height: 4px; margin: 8px auto 6px auto; border-radius: 3px;
+  background: linear-gradient(90deg, rgba(230,57,70,0) 0%, var(--accent) 50%, rgba(230,57,70,0) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3.5s linear infinite;
+  opacity: .9;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* Agent status line */
+.s-status { text-align:center; color: var(--muted); font-size: 13px; }
+.pulse {
+  display:inline-block; width:10px; height:10px; border-radius:50%;
+  background: var(--accent); margin-left:8px; box-shadow: 0 0 0 rgba(230,57,70, 0.7);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(230,57,70,0.5); }
+  70% { box-shadow: 0 0 0 10px rgba(230,57,70,0); }
+  100% { box-shadow: 0 0 0 0 rgba(230,57,70,0); }
+}
+
+/* Containers */
+.chat-wrap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  height: 68vh;            /* fixed height; scrolls inside */
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.chat-bubble {
+  background: rgba(28,33,41, 0.92);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 10px 0;
+  line-height: 1.55;
+  color: var(--text);
+  animation: fadeIn 240ms ease-in;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.meta { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+.static-footer {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  background: var(--bg);
+  border-top: 2px solid var(--accent);
+  box-shadow: 0 -6px 24px rgba(0,0,0,0.45);
+  padding: 10px 16px;
+  z-index: 9999;
+}
+
+/* Inputs/Buttons */
+.stTextArea textarea {
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border);
+}
+.stButton>button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+}
+.stButton>button:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(230,57,70,0.28);
+}
+hr { border: 0; height: 1px; background: var(--border); }
 </style>
 """, unsafe_allow_html=True)
 
+# -------------------- SESSION STATE --------------------
+defaults = {
+    "history": [],            # list of {agent, query, response, time}
+    "context": "",            # extracted file text
+    "last_agent": "strata",   # current agent
+    "next_agent": "dealhawk", # pointer to next
+    "is_running": False
+}
+for k, v in defaults.items():
+    st.session_state.setdefault(k, v)
 
-# ---------- Header ----------
+# -------------------- HEADER --------------------
 st.markdown("""
-<div style="display:flex;align-items:center;gap:14px;">
-  <div>
-    <div class="sentinel-title">SENTINEL</div>
-    <div class="sentinel-sub">Autonomous Agents for Asymmetric Advantage</div>
-  </div>
+<div class="s-header">
+  <div class="s-title">SENTINEL</div>
+  <div class="s-underline"></div>
 </div>
-<div class="divider"></div>
 """, unsafe_allow_html=True)
 
+# Active agent line with pulse
+st.markdown(
+    f"""<div class="s-status">
+            ACTIVE AGENT: <b>{st.session_state['last_agent'].upper()}</b>
+            <span class="pulse"></span>
+        </div>
+        <hr/>""",
+    unsafe_allow_html=True
+)
 
-# ---------- Constants ----------
-MAX_FILE_MB = 10
-MAX_FILES = 3
-MAX_CONTEXT = 12000
-
+# -------------------- AGENTS --------------------
 AGENTS = {
-    "strata": {"color": "#4CAF50", "desc": "Research and intelligence for energy & decarbonization."},
-    "dealhawk": {"color": "#FF9800", "desc": "Deal sourcing of late-stage profitable transition firms."},
-    "neo": {"color": "#2196F3", "desc": "Financial modeling and scenario analysis."},
-    "cipher": {"color": "#9C27B0", "desc": "Governance, PII scrub, data validation."},
-    "proforma": {"color": "#795548", "desc": "Formats outputs, IC-ready exports."},
+    "strata": "Research & intelligence for energy/decarbonization.",
+    "dealhawk": "Deal sourcing for profitable private companies.",
+    "neo": "Financial modeling and scenario analysis.",
+    "cipher": "Governance, PII scrub, policy checks.",
+    "proforma": "Formatting and exports for IC memos."
 }
 AGENT_SEQUENCE = list(AGENTS.keys())
 
+# -------------------- SIDEBAR: Controls + Upload --------------------
+st.sidebar.markdown("### ⚙️ Orchestrator")
+agent_sel = st.sidebar.selectbox("Choose agent", options=AGENT_SEQUENCE,
+                                 index=AGENT_SEQUENCE.index(st.session_state["last_agent"]),
+                                 format_func=lambda x: x.upper())
+st.sidebar.caption(AGENTS[agent_sel])
 
-# ---------- Session State ----------
-for key, default in {
-    "history": [], "context_text": "", "last_agent": None,
-    "next_agent": None, "is_running": False
-}.items():
-    st.session_state.setdefault(key, default)
+# keep last_agent in sync with selector
+st.session_state["last_agent"] = agent_sel
+current_index = AGENT_SEQUENCE.index(agent_sel)
+st.session_state["next_agent"] = AGENT_SEQUENCE[current_index + 1] if current_index + 1 < len(AGENT_SEQUENCE) else None
 
+MAX_FILES = 3
+MAX_MB = 10
+MAX_CONTEXT_CHARS = 10000
 
-# ---------- File Parsing & OCR ----------
-def size_mb(f): return len(f.getbuffer()) / (1024 * 1024)
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📎 Upload files (PDF/DOCX)")
+files = st.sidebar.file_uploader("Up to 3 files • 10 MB each", type=["pdf", "docx"], accept_multiple_files=True)
 
-def extract_text_from_pdf(file) -> str:
-    """Try text extraction; fallback to OCR if needed."""
+def _size_mb(file): return len(file.getbuffer()) / (1024 * 1024)
+
+def extract_text_from_pdf_bytes(b: bytes) -> str:
     text = ""
-    try:
-        with pdfplumber.open(file) as pdf:
-            for p in pdf.pages:
-                text += p.extract_text() or ""
-    except Exception:
-        return ""
-    if text.strip():  # text found
-        return text
-    # OCR fallback
-    if not OCR_AVAILABLE:
-        st.warning("⚠️ OCR libraries missing (pdf2image/pytesseract). Skipping OCR.")
-        return ""
-    try:
-        file.seek(0)
-        images = convert_from_bytes(file.read(), dpi=200)
-        ocr_text = []
-        for img in images:
-            ocr_text.append(pytesseract.image_to_string(img))
-        return "\n".join(ocr_text)
-    except Exception as e:
-        st.warning(f"OCR failed: {e}")
-        return ""
+    # Try selectable text first if pdfplumber is available
+    if pdfplumber is not None:
+        try:
+            with pdfplumber.open(io.BytesIO(b)) as pdf:
+                for p in pdf.pages:
+                    text += p.extract_text() or ""
+        except Exception:
+            pass
+    # If nothing or no pdfplumber, try OCR (if available)
+    if not text.strip() and OCR_AVAILABLE:
+        try:
+            imgs = convert_from_bytes(b, dpi=200)
+            chunks = []
+            for img in imgs:
+                chunks.append(pytesseract.image_to_string(img))
+            text = "\n".join(chunks)
+        except Exception:
+            pass
+    return text.strip()
 
-def extract_text_from_docx(file) -> str:
+def extract_text_from_docx_bytes(b: bytes) -> str:
     try:
-        doc = Document(file)
+        doc = Document(io.BytesIO(b))
         return "\n".join(p.text for p in doc.paragraphs)
     except Exception:
         return ""
 
+if files:
+    too_big = [f.name for f in files if _size_mb(f) > MAX_MB]
+    if too_big:
+        st.sidebar.error(f"Too large (>10 MB): {', '.join(too_big)}")
+    else:
+        texts = []
+        with st.sidebar.status("Parsing files...", expanded=False) as s:
+            for f in files[:MAX_FILES]:
+                data = f.getvalue()
+                name = f.name.lower()
+                parsed = ""
+                if name.endswith(".pdf"):
+                    parsed = extract_text_from_pdf_bytes(data)
+                elif name.endswith(".docx"):
+                    parsed = extract_text_from_docx_bytes(data)
+                if parsed:
+                    texts.append(parsed)
+            if texts:
+                ctx = ("\n\n".join(texts)).strip()
+                st.session_state["context"] = ctx[:MAX_CONTEXT_CHARS]
+                s.update(label=f"✅ Parsed {len(ctx):,} characters", state="complete")
+            else:
+                s.update(label="⚠️ No readable text extracted", state="error")
 
-def parse_uploads(files) -> Tuple[str, float]:
-    """Combine parsed text + heuristic confidence."""
-    if not files: return "", 0.0
-    text_parts, total_bytes = [], 0
-    for f in files[:MAX_FILES]:
-        total_bytes += len(f.getbuffer())
-        name = f.name.lower()
-        if name.endswith(".pdf"):
-            text_parts.append(extract_text_from_pdf(f))
-        elif name.endswith(".docx"):
-            text_parts.append(extract_text_from_docx(f))
-    text = "\n\n".join([t for t in text_parts if t])
-    mb = max(total_bytes / (1024 * 1024), 0.001)
-    conf = min(len(text) / (mb * 5000), 2.0)
-    return text.strip(), round(conf * 100, 1)
+if st.session_state.get("context"):
+    with st.sidebar.expander("🗂 Preview extracted text", expanded=False):
+        st.text_area("Context (trimmed)", st.session_state["context"][:3000], height=200)
 
+st.sidebar.markdown("---")
+if st.sidebar.button("🔁 Reset Session", use_container_width=True):
+    for k in list(st.session_state.keys()):
+        del st.session_state[k]
+    st.experimental_rerun()
 
-# ---------- Sidebar ----------
-with st.sidebar:
-    st.markdown("### Agent Selector")
-    agent = st.selectbox("Choose an agent:", AGENT_SEQUENCE,
-                         format_func=lambda k: k.upper())
-    st.caption(AGENTS[agent]["desc"])
+# -------------------- CHAT HISTORY (scrollable) --------------------
+st.markdown('<div id="chat" class="chat-wrap">', unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.markdown("### Upload Documents")
-    files = st.file_uploader(
-        "PDF/DOCX (max 10 MB each, up to 3)",
-        type=["pdf", "docx"],
-        accept_multiple_files=True
-    )
+if st.session_state["history"]:
+    for item in st.session_state["history"][-10:]:
+        st.markdown(
+            f"""<div class="chat-bubble">
+                    <b>{item['agent'].upper()}</b><br>
+                    {item['response'].replace(chr(10), '<br>')}
+                    <div class="meta">⏱ {item['time']}</div>
+                </div>""",
+            unsafe_allow_html=True
+        )
+else:
+    st.info("Upload files (optional) and type a prompt below to get started.")
 
-    if files:
-        big = [f.name for f in files if size_mb(f) > MAX_FILE_MB]
-        if big:
-            st.error(f"Files too large: {', '.join(big)}")
-        else:
-            with st.spinner("Extracting text..."):
-                ctx, conf = parse_uploads(files)
-                if ctx:
-                    st.session_state.context_text = ctx[:MAX_CONTEXT]
-                    st.success(f"✅ Parsed {len(ctx):,} chars • confidence ≈ {int(conf)}%")
-                else:
-                    st.warning("No readable text found (possibly scanned with poor OCR).")
-    if st.session_state.context_text:
-        with st.expander("📄 Preview Extracted Text"):
-            st.text_area("Extracted Context (trimmed)",
-                         st.session_state.context_text[:4000], height=200)
+st.markdown('</div>', unsafe_allow_html=True)
 
+# Auto-scroll chat to bottom
+st.markdown("""
+<script>
+const el = window.parent.document.getElementById('chat');
+if (el) { el.scrollTop = el.scrollHeight; }
+</script>
+""", unsafe_allow_html=True)
 
-# ---------- Helper ----------
-def build_query(user_query: str) -> str:
-    ctx = st.session_state.get("context_text", "").strip()
+# -------------------- AGENT RUNNER --------------------
+def build_query_with_context(user_q: str) -> str:
+    ctx = st.session_state.get("context", "").strip()
     if not ctx:
-        return user_query
-    return f"Context from uploaded documents:\n{ctx}\n\nUser Query:\n{user_query}"
+        return user_q
+    return f"Context from uploaded documents:\n{ctx}\n\nUser Query:\n{user_q}"
 
-
-# ---------- Agent Runner ----------
-def run_agent(agent_key: str, query_text: str):
-    if st.session_state.is_running:
+def run_agent(agent_key: str, user_q: str):
+    if st.session_state["is_running"]:
         return
-    st.session_state.is_running = True
+    st.session_state["is_running"] = True
     start = time.time()
-    q = build_query(query_text)
 
+    q = build_query_with_context(user_q)
+    retries = 3
+    output = ""
     with st.spinner(f"Running {agent_key.upper()}..."):
-        attempt = 0
-        while attempt < 3:
+        for attempt in range(retries):
             try:
                 result = subprocess.run(
                     ["python", "sentinal_orchestrator.py", agent_key, q],
                     capture_output=True, text=True, check=True, timeout=60
                 )
-                output = result.stdout.strip() or "(no output)"
+                output = (result.stdout or "").strip()
+                if not output:
+                    output = "(no output)"
                 break
             except subprocess.TimeoutExpired:
-                attempt += 1
-                st.warning(f"⚠️ Timeout, retrying ({attempt}/3)...")
-                time.sleep(2 ** attempt)
+                if attempt < retries - 1:
+                    time.sleep(2 ** attempt)
+                else:
+                    output = "⏱️ Timeout after 60s (3 attempts)."
             except subprocess.CalledProcessError as e:
                 output = e.stdout or e.stderr or "Agent execution error."
                 break
-        else:
-            output = "❌ Agent failed after 3 attempts."
 
-    dur = round(time.time() - start, 2)
-    color = AGENTS[agent_key]["color"]
-    st.markdown(
-        f"<div class='chat-bubble' style='border-left-color:{color};'>"
-        f"<b>{agent_key.upper()}</b><br>{output.replace(chr(10), '<br>')}"
-        f"<br><small style='color:#888;'>⏱ {dur}s</small></div>",
-        unsafe_allow_html=True
-    )
-    st.session_state.history.append({
-        "agent": agent_key, "query": query_text,
-        "response": output, "time": datetime.now().strftime("%H:%M:%S"),
-        "runtime_s": dur
+    st.session_state["history"].append({
+        "agent": agent_key,
+        "query": user_q,
+        "response": output,
+        "time": datetime.now().strftime("%H:%M:%S")
     })
+
+    # set next agent pointer
     idx = AGENT_SEQUENCE.index(agent_key)
-    st.session_state.next_agent = (
-        AGENT_SEQUENCE[idx + 1] if idx + 1 < len(AGENT_SEQUENCE) else None
-    )
-    st.session_state.is_running = False
+    st.session_state["next_agent"] = AGENT_SEQUENCE[idx + 1] if idx + 1 < len(AGENT_SEQUENCE) else None
 
+    st.session_state["is_running"] = False
 
-# ---------- Conversation ----------
-st.markdown("### Conversation")
-if st.session_state.history:
-    for h in st.session_state.history[-10:]:
-        c = AGENTS[h["agent"]]["color"]
-        st.markdown(
-            f"<div class='chat-bubble' style='border-left-color:{c};'>"
-            f"<b>{h['agent'].upper()}</b> ({h['time']})<br>{h['response']}</div>",
-            unsafe_allow_html=True
-        )
-else:
-    st.info("Start by uploading documents or sending a query to an agent.")
+# -------------------- STATIC FOOTER (input + buttons) --------------------
+st.markdown('<div class="static-footer">', unsafe_allow_html=True)
+col1, col2 = st.columns([4, 2])
+with col1:
+    user_query = st.text_area("Type your prompt here:",
+                              placeholder="Ask about a market theme, target list, or modeling scenario…",
+                              height=80, key="prompt")
+with col2:
+    ask_btn = st.button("💬 Ask Agent", use_container_width=True, key="ask")
+    next_key = st.session_state.get("next_agent")
+    if next_key:
+        next_btn = st.button(f"➡ Send to {next_key.upper()}", use_container_width=True, key="next")
+    else:
+        next_btn = False
+st.markdown('</div>', unsafe_allow_html=True)
 
-
-# ---------- Input Bar ----------
-st.markdown("<div class='static-input'>", unsafe_allow_html=True)
-user_query = st.text_area("Type your prompt here:", height=80,
-                          placeholder="Ask Sentinel anything...")
-
-cols = st.columns(2)
-with cols[0]:
-    if st.button("💬 Ask Agent", use_container_width=True) and user_query.strip():
-        run_agent(agent, user_query)
-with cols[1]:
-    nxt = st.session_state.get("next_agent")
-    if nxt and st.button(f"➡ Send to {nxt.upper()}", use_container_width=True):
-        run_agent(nxt, user_query)
-st.markdown("</div>", unsafe_allow_html=True)
-
-
-# ---------- Reset ----------
-st.markdown("<hr>", unsafe_allow_html=True)
-if st.button("🔁 Start New Search", use_container_width=True):
-    for k in list(st.session_state.keys()):
-        del st.session_state[k]
-    st.experimental_rerun()
+if ask_btn and user_query.strip():
+    run_agent(st.session_state["last_agent"], user_query.strip())
+elif next_btn and user_query.strip():
+    run_agent(next_key, user_query.strip())
