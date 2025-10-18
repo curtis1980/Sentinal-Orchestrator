@@ -1,157 +1,164 @@
-# app.py — Sentinel Beta v1.4
+# app.py
 import streamlit as st
 import subprocess
 import time
 from datetime import datetime
-from io import BytesIO
+import base64
 from docx import Document
-import fitz  # PyMuPDF for PDFs
-import os
+import pdfplumber
 
-# =========================================================
-# Sentinel Header
-# =========================================================
-st.set_page_config(page_title="Sentinel", layout="centered")
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="Sentinel | Longbow Capital", layout="centered")
 
-st.markdown("""
-<div style="
-    text-align:center;
-    background-color:#0a0a0a;
-    padding:50px 0 30px 0;
-    border-bottom:3px solid #e63946;
-">
-    <h1 style="color:#f2f2f2;font-size:46px;font-weight:800;letter-spacing:2px;margin-bottom:10px;">
-        SENTINEL
-    </h1>
-    <h4 style="color:#e63946;font-weight:600;letter-spacing:1.5px;margin-top:0;">
-        AUTONOMOUS AGENTS FOR ASYMMETRIC ADVANTAGE
-    </h4>
-</div>
-""", unsafe_allow_html=True)
-
-# =========================================================
-# Sentinel Theme
-# =========================================================
+# --- CUSTOM STYLES ---
 st.markdown("""
 <style>
-body, .main, .block-container {
-    background-color:#0a0a0a !important;
-    color:#f2f2f2 !important;
-    font-family:'Inter',sans-serif;
+body {
+    background-color: #0E0E0E;
+    color: #E5E5E5;
+    font-family: 'Inter', sans-serif;
 }
+
+.sentinel-header {
+    margin-bottom: 20px;
+}
+
+img:hover {
+    opacity: 1.0;
+    transition: 0.25s ease-in-out;
+    transform: scale(1.02);
+}
+
+.divider {
+    border-bottom: 1px solid #333;
+    margin: 20px 0 30px 0;
+}
+
+.sentinel-title {
+    font-size: 38px;
+    font-weight: 700;
+    color: #F3F3F3;
+    letter-spacing: 1px;
+}
+
+.sentinel-sub {
+    font-size: 15px;
+    color: #C0C0C0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
 .chat-container {
-    height:65vh;
-    overflow-y:auto;
-    background-color:#111;
-    border:1px solid #1f1f1f;
-    border-radius:8px;
-    padding:16px;
-    box-shadow:inset 0 0 8px rgba(0,0,0,0.5);
-    scroll-behavior:smooth;
-    font-size:15px;
+    max-height: 550px;
+    overflow-y: auto;
+    padding-right: 10px;
+    margin-bottom: 120px;
 }
-.input-area {
-    position:sticky;
-    bottom:0;
-    background-color:#0a0a0a;
-    border-top:1px solid #222;
-    padding:12px;
-    box-shadow:0 -2px 10px rgba(0,0,0,0.3);
-    backdrop-filter:blur(6px);
+
+.chat-bubble {
+    background-color: #1B1B1B;
+    border-left: 4px solid #E74C3C;
+    padding: 12px;
+    border-radius: 10px;
+    margin: 8px 0;
 }
-.bubble {
-    padding:14px 16px;
-    border-radius:10px;
-    margin:10px 0;
-    color:#fff;
-    line-height:1.4em;
-    box-shadow:0 1px 3px rgba(0,0,0,0.4);
-    transition:all 0.2s ease;
+
+.static-input {
+    position: fixed;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    background-color: #0E0E0E;
+    padding: 10px 20px;
+    border-top: 1px solid #222;
+    box-shadow: 0px -1px 4px rgba(0, 0, 0, 0.3);
 }
-.bubble:hover {box-shadow:0 0 8px rgba(230,57,70,0.4);}
-.bubble.strata {background:#123524;}
-.bubble.dealhawk {background:#3a2f0b;}
-.bubble.neo {background:#102941;}
-.bubble.cipher {background:#2d1b4a;}
-.bubble.proforma {background:#2e1d1f;}
-div.stButton > button:first-child {
-    background-color:#e63946 !important;
-    color:#fff !important;
-    border:1px solid #e63946 !important;
-    font-weight:600 !important;
-    border-radius:6px !important;
-}
-div.stButton > button:first-child:hover {
-    background-color:#ff4d5a !important;
-    color:white !important;
-}
-textarea {
-    background-color:#111 !important;
-    color:#fff !important;
-    border:1px solid #333 !important;
-}
-hr {border:0;border-top:1px solid #333;margin-top:25px;}
 </style>
 """, unsafe_allow_html=True)
 
-# =========================================================
-# Agent Registry
-# =========================================================
+# --- LONG BOW BRANDING HEADER ---
+def load_logo(path: str):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+logo_base64 = load_logo("Longbow-Capital_Logo.png")
+
+st.markdown(f"""
+<div class="sentinel-header" style="display:flex;align-items:center;justify-content:space-between;">
+  <div style="display:flex;align-items:center;gap:14px;">
+    <img src="data:image/png;base64,{logo_base64}" width="190" style="margin-right:10px;opacity:0.9;">
+    <div>
+      <div class="sentinel-title">SENTINEL</div>
+      <div class="sentinel-sub">Autonomous Agents for Asymmetric Advantage</div>
+    </div>
+  </div>
+</div>
+<div class="divider"></div>
+""", unsafe_allow_html=True)
+
+# --- AGENTS CONFIG ---
 AGENTS = {
-    "strata": {"color":"#123524","desc":"Research and intelligence agent for energy and decarbonization ecosystems."},
-    "dealhawk": {"color":"#3a2f0b","desc":"Deal sourcing agent identifying late-stage, profitable private companies in energy transition."},
-    "neo": {"color":"#102941","desc":"Analytical agent that builds financial models, pro formas, and scenario simulations."},
-    "cipher": {"color":"#2d1b4a","desc":"Security and coordination agent managing communication between other agents."},
-    "proforma": {"color":"#2e1d1f","desc":"Automates and validates private-equity financial assumptions and model inputs."}
+    "strata": {"color": "#4CAF50", "desc": "Research and intelligence agent for energy and decarbonization ecosystems."},
+    "dealhawk": {"color": "#FF9800", "desc": "Deal sourcing agent identifying late-stage, profitable private companies in energy transition."},
+    "neo": {"color": "#2196F3", "desc": "Analytical agent that builds financial models and scenario simulations."},
+    "cipher": {"color": "#9C27B0", "desc": "Security and coordination agent managing cross-agent communication."},
+    "proforma": {"color": "#795548", "desc": "Automates and validates private equity financial assumptions and model inputs."}
 }
 AGENT_SEQUENCE = list(AGENTS.keys())
 
-# =========================================================
-# Session State Setup
-# =========================================================
+# --- SESSION STATE ---
 st.session_state.setdefault("history", [])
-st.session_state.setdefault("uploaded_text", None)
-st.session_state.setdefault("uploaded_filename", None)
 st.session_state.setdefault("last_agent", None)
 st.session_state.setdefault("last_response", None)
 st.session_state.setdefault("next_agent", None)
 st.session_state.setdefault("is_running", False)
 
-# =========================================================
-# File Processing Helpers
-# =========================================================
-def extract_text_from_pdf(file):
-    text = ""
-    with fitz.open(stream=file.read(), filetype="pdf") as doc:
-        for page in doc:
-            text += page.get_text("text")
-    return text
+# --- FILE UPLOAD HANDLER ---
+uploaded_file = st.file_uploader("📎 Upload a PDF or DOCX (max 10MB):", type=["pdf", "docx"])
+file_text = ""
+if uploaded_file:
+    file_size = len(uploaded_file.getbuffer())
+    if file_size > 10 * 1024 * 1024:
+        st.error("⚠️ File too large. Please upload files under 10 MB.")
+    else:
+        try:
+            if uploaded_file.name.endswith(".pdf"):
+                with pdfplumber.open(uploaded_file) as pdf:
+                    file_text = "\n".join([page.extract_text() or "" for page in pdf.pages])
+            elif uploaded_file.name.endswith(".docx"):
+                doc = Document(uploaded_file)
+                file_text = "\n".join([p.text for p in doc.paragraphs])
+            st.success(f"✅ {uploaded_file.name} uploaded and parsed successfully.")
+        except Exception as e:
+            st.error(f"⚠️ Failed to read file: {e}")
 
-def extract_text_from_docx(file):
-    doc = Document(file)
-    return "\n".join([p.text for p in doc.paragraphs])
-
-# =========================================================
-# Core Agent Runner
-# =========================================================
+# --- AGENT RUNNER FUNCTION ---
 def run_agent(agent, query):
     if st.session_state.is_running:
         return
     st.session_state.is_running = True
     start = time.time()
+
+    full_query = f"{query}\n\n(File context: {file_text[:2000]}...)" if file_text else query
+
     with st.spinner(f"Running {agent.upper()}..."):
         try:
             result = subprocess.run(
-                ["python", "sentinal_orchestrator.py", agent, query],
-                capture_output=True, text=True, check=True
+                ["python", "sentinal_orchestrator.py", agent, full_query],
+                capture_output=True,
+                text=True,
+                check=True
             )
-            output = "\n".join([ln for ln in result.stdout.splitlines() if ln.strip()])
+            output = result.stdout.strip()
             duration = round(time.time() - start, 2)
+
             st.markdown(
-                f"<div class='bubble {agent}'><b>{agent.upper()}:</b><br>{output.replace(chr(10), '<br>')}"
-                f"<br><small>⏱ {duration}s</small></div>",
+                f"<div class='chat-bubble' style='border-left:4px solid {AGENTS[agent]['color']};'>"
+                f"<b>{agent.upper()}:</b><br>{output.replace(chr(10), '<br>')}<br>"
+                f"<small style='color:#888;'>⏱ {duration}s</small></div>",
                 unsafe_allow_html=True
             )
+
             st.session_state.history.append({
                 "agent": agent,
                 "query": query,
@@ -161,117 +168,53 @@ def run_agent(agent, query):
             st.session_state.last_agent = agent
             st.session_state.last_response = output
             idx = AGENT_SEQUENCE.index(agent)
-            st.session_state.next_agent = (
-                AGENT_SEQUENCE[idx+1] if idx+1 < len(AGENT_SEQUENCE) else None
-            )
+            st.session_state.next_agent = AGENT_SEQUENCE[idx + 1] if idx + 1 < len(AGENT_SEQUENCE) else None
         except subprocess.CalledProcessError as e:
-            st.error(f"⚠ Agent Error: {e.stderr or e.stdout or 'Unknown issue'}")
+            st.error(f"⚠️ Agent Error: {e.stderr or e.stdout or 'Unknown issue'}")
         finally:
             st.session_state.is_running = False
 
-# =========================================================
-# Chat Console
-# =========================================================
-st.markdown("### 🧠 Sentinel Console")
-st.markdown("<div class='chat-container' id='chatbox'>", unsafe_allow_html=True)
+# --- MAIN CHAT AREA ---
+st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
 if st.session_state.history:
-    for h in st.session_state.history[-10:]:
+    for item in st.session_state.history[-10:]:
         st.markdown(
-            f"<div class='bubble {h['agent']}'><b>{h['agent'].upper()}:</b><br>{h['response'].replace(chr(10), '<br>')}</div>",
+            f"<div class='chat-bubble' style='border-left:4px solid {AGENTS[item['agent']]['color']};'>"
+            f"<b>{item['agent'].upper()}</b> ({item['time']}): {item['response']}</div>",
             unsafe_allow_html=True
         )
-else:
-    st.markdown("<p style='color:#666;'>No conversations yet. Start by asking an agent below.</p>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
-# =========================================================
-# File Upload + Processing
-# =========================================================
-st.markdown("### 📎 Upload a Document for Diligence")
-uploaded_file = st.file_uploader("Drag and drop a PDF or DOCX file (max 10MB)", type=["pdf","docx"])
-
-if uploaded_file:
-    if uploaded_file.size > 10 * 1024 * 1024:
-        st.error("⚠ File too large. Please upload a file under 10 MB.")
-    else:
-        with st.spinner("Extracting text..."):
-            try:
-                if uploaded_file.type == "application/pdf":
-                    text = extract_text_from_pdf(uploaded_file)
-                elif uploaded_file.type in ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]:
-                    text = extract_text_from_docx(uploaded_file)
-                else:
-                    st.error("Unsupported file format.")
-                    text = None
-                if text:
-                    st.session_state.uploaded_text = text
-                    st.session_state.uploaded_filename = uploaded_file.name
-                    st.success(f"✅ {uploaded_file.name} uploaded and processed successfully.")
-            except Exception as e:
-                st.error(f"Error processing file: {e}")
-
-# =========================================================
-# Input Bar (Sticky)
-# =========================================================
-st.markdown("<div class='input-area'>", unsafe_allow_html=True)
+# --- STATIC INPUT BAR (BOTTOM) ---
+st.markdown("<div class='static-input'>", unsafe_allow_html=True)
 agent = st.selectbox("Choose an agent:", AGENT_SEQUENCE)
-query = st.text_area("Type your prompt here:", key="user_query", placeholder="Ask your agent something...")
-
-col1, col2, col3 = st.columns([1,1,1])
-ask_clicked = col1.button("💬 Ask Same Agent", use_container_width=True)
-next_agent = st.session_state.get("next_agent")
-next_label = f"➡ Send to {next_agent.upper()}" if next_agent else "➡ Send to Next Agent"
-next_clicked = col2.button(next_label, use_container_width=True)
-analyze_clicked = col3.button("📄 Analyze Uploaded Document", use_container_width=True)
-
-if ask_clicked:
-    if query.strip():
-        run_agent(agent, query)
-        st.session_state.user_query = ""
-    else:
-        st.warning("Please enter a query first.")
-
-if next_clicked:
-    if next_agent and query.strip():
-        run_agent(next_agent, query)
-        st.session_state.user_query = ""
-    elif not next_agent:
-        st.warning("No next agent available — start with STRATA.")
-    else:
-        st.warning("Please enter a query first.")
-
-if analyze_clicked:
-    if st.session_state.uploaded_text:
-        with st.spinner("Analyzing document..."):
-            doc_summary = st.session_state.uploaded_text[:4000]  # truncate for token safety
-            query = f"Analyze the following document for key insights, risks, and investment relevance:\n\n{doc_summary}"
+query = st.text_area("Type your prompt here:", placeholder="Ask your agent something...")
+cols = st.columns(2)
+with cols[0]:
+    if st.button("💬 Ask Same Agent", use_container_width=True):
+        if query.strip():
             run_agent(agent, query)
-    else:
-        st.warning("Please upload a PDF or DOCX file first.")
-
+        else:
+            st.warning("Please enter a query.")
+with cols[1]:
+    next_agent = st.session_state.get("next_agent")
+    if next_agent:
+        if st.button(f"➡️ Send to {next_agent.upper()}", use_container_width=True):
+            if query.strip():
+                run_agent(next_agent, query)
+            else:
+                st.warning("Please enter a query.")
 st.markdown("</div>", unsafe_allow_html=True)
 
-# =========================================================
-# Reset Session
-# =========================================================
+# --- RESET SESSION ---
 st.markdown("<hr>", unsafe_allow_html=True)
-col1, col2, col3 = st.columns([1,2,1])
+col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     if st.button("🔁 Start New Search", use_container_width=True):
         with st.spinner("🧠 Clearing session and resetting Sentinel..."):
             time.sleep(1)
-            for k in list(st.session_state.keys()):
-                del st.session_state[k]
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
             st.success("✅ Ready for a fresh search!")
-            time.sleep(0.8)
+            time.sleep(0.5)
             st.experimental_rerun()
-
-# =========================================================
-# Auto-scroll JS
-# =========================================================
-st.markdown("""
-<script>
-var chatBox = window.parent.document.querySelector('#chatbox');
-if (chatBox) { chatBox.scrollTop = chatBox.scrollHeight; }
-</script>
-""", unsafe_allow_html=True)
