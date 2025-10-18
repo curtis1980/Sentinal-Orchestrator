@@ -1,263 +1,189 @@
-# app.py
+# app.py  — Sentinel Beta v1.0
 import streamlit as st
 import subprocess
 import time
 from datetime import datetime
-import io
-import csv
-from docx import Document
 
-# ----------------------------
-# Page + Branding
-# ----------------------------
-st.set_page_config(page_title="Sentinel", layout="wide")
-st.markdown(
-    """
-    <style>
-        .sentinel-header {
-            background: linear-gradient(90deg, #0d6efd, #6610f2);
-            color: white; padding: 14px 18px; border-radius: 12px; margin-bottom: 10px;
-        }
-        .chat-container {
-            height: 520px; overflow-y: auto; background: #f8f9fa; border: 1px solid #e9ecef;
-            border-radius: 10px; padding: 12px;
-        }
-        .bubble {
-            padding: 12px; border-radius: 10px; color: white; margin: 8px 0;
-        }
-        .legend-pill {
-            display: inline-block; padding: 6px 10px; border-radius: 999px; color: #fff; margin-right: 8px; font-size: 12px;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# =========================================================
+# Sentinel Header & Theme
+# =========================================================
+st.set_page_config(page_title="Sentinel", layout="centered")
 
-st.markdown(
-    """
-    <div class="sentinel-header">
-        <h2 style="margin:0;">🧠 Sentinel</h2>
-        <div>Autonomous Agents for Asymmetric Advantage</div>
-        <small>Multi-agent intelligence stack for energy, capital, and strategy.</small>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("""
+<div style="
+    text-align:center;
+    background-color:#0a0a0a;
+    padding:50px 0 30px 0;
+    border-bottom:3px solid #e63946;
+">
+    <h1 style="color:#f2f2f2;font-size:46px;font-weight:800;letter-spacing:2px;margin-bottom:10px;">
+        SENTINEL
+    </h1>
+    <h4 style="color:#e63946;font-weight:600;letter-spacing:1.5px;margin-top:0;">
+        AUTONOMOUS AGENTS FOR ASYMMETRIC ADVANTAGE
+    </h4>
+</div>
+""", unsafe_allow_html=True)
 
-# ----------------------------
-# Agent Data
-# ----------------------------
-AGENTS = {
-    "strata":   {"color": "#4CAF50", "desc": "Research & intelligence for energy/decarbonization ecosystems."},
-    "dealhawk": {"color": "#FF9800", "desc": "Deal sourcing for late-stage, profitable ET companies."},
-    "neo":      {"color": "#2196F3", "desc": "Analytics & modeling: pro formas, scenarios, sensitivities."},
-    "cipher":   {"color": "#9C27B0", "desc": "Security/coordination between agents; integrity & routing."},
-    "proforma": {"color": "#795548", "desc": "Automates/validates PE financial assumptions & inputs."},
+# =========================================================
+# Custom CSS (dark theme, red accent, muted agent tones)
+# =========================================================
+st.markdown("""
+<style>
+body, .main, .block-container {
+    background-color:#0a0a0a !important;
+    color:#f2f2f2 !important;
+    font-family:'Inter',sans-serif;
 }
-SEQUENCE = list(AGENTS.keys())
 
-# ----------------------------
-# Session State (with safe defaults)
-# ----------------------------
-st.session_state.setdefault("history", [])            # list of dicts: {agent, query, response, time}
+/* Scrollable chat area */
+.chat-container {
+    height:65vh;
+    overflow-y:auto;
+    background-color:#111;
+    border:1px solid #1f1f1f;
+    border-radius:8px;
+    padding:16px;
+}
+
+/* Input bar */
+.input-area {
+    position:sticky;
+    bottom:0;
+    background-color:#0a0a0a;
+    border-top:1px solid #222;
+    padding:12px;
+}
+
+/* Agent message bubbles */
+.bubble {padding:14px 16px;border-radius:10px;margin:10px 0;color:#fff;
+         line-height:1.4em;transition:all 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.4);}
+.bubble:hover {transform:scale(1.01);}
+.bubble.strata {background:#123524;}
+.bubble.dealhawk {background:#3a2f0b;}
+.bubble.neo {background:#102941;}
+.bubble.cipher {background:#2d1b4a;}
+.bubble.proforma {background:#2e1d1f;}
+
+/* Buttons */
+button[data-baseweb="button"] {
+    background-color:#e63946 !important;
+    color:white !important;
+    border:none !important;
+    font-weight:600;
+    border-radius:6px;
+}
+button[data-baseweb="button"]:hover {background-color:#ff4d5a !important;}
+
+/* Text area */
+textarea {
+    background-color:#111 !important;
+    color:#fff !important;
+    border:1px solid #333 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# =========================================================
+# Agent Registry
+# =========================================================
+AGENTS = {
+    "strata": {"color":"#123524","desc":"Research and intelligence agent for energy and decarbonization ecosystems."},
+    "dealhawk": {"color":"#3a2f0b","desc":"Deal sourcing agent identifying late-stage, profitable private companies in energy transition."},
+    "neo": {"color":"#102941","desc":"Analytical agent that builds financial models, pro formas, and scenario simulations."},
+    "cipher": {"color":"#2d1b4a","desc":"Security and coordination agent managing communication between other agents."},
+    "proforma": {"color":"#2e1d1f","desc":"Automates and validates private-equity financial assumptions and model inputs."}
+}
+AGENT_SEQUENCE = list(AGENTS.keys())
+
+# =========================================================
+# Session State
+# =========================================================
+st.session_state.setdefault("history", [])
 st.session_state.setdefault("last_agent", None)
 st.session_state.setdefault("last_response", None)
 st.session_state.setdefault("next_agent", None)
-st.session_state.setdefault("is_running", False)      # prevents repeated runs per click
-st.session_state.setdefault("user_query", "")         # bind main query input
-st.session_state.setdefault("follow_up", "")          # bind follow-up input
+st.session_state.setdefault("is_running", False)
 
-# ----------------------------
-# Sidebar: Controls, Legend, Export
-# ----------------------------
-with st.sidebar:
-    st.subheader("⚙️ Controls")
-    start_agent = st.selectbox("Start agent", SEQUENCE, index=0)
-    st.caption(AGENTS[start_agent]["desc"])
-    st.markdown("---")
-
-    # Color legend
-    st.subheader("🎨 Legend")
-    for a, meta in AGENTS.items():
-        st.markdown(
-            f"<span class='legend-pill' style='background:{meta['color']}'>{a.upper()}</span>",
-            unsafe_allow_html=True
-        )
-    st.markdown("---")
-
-    # Session metadata
-    st.subheader("📊 Session")
-    st.write(f"Current agent: **{(st.session_state.last_agent or start_agent).upper()}**")
-    st.write(f"Interactions: **{len(st.session_state.history)}**")
-    st.write(f"Last updated: **{datetime.now().strftime('%H:%M:%S')}**")
-
-    st.markdown("---")
-    st.subheader("💾 Export Session")
-
-    def export_txt():
-        buf = io.StringIO()
-        for h in st.session_state.history:
-            buf.write(f"[{h['time']}] {h['agent'].upper()} | Q: {h['query']}\n{h['response']}\n\n")
-        return buf.getvalue().encode("utf-8")
-
-    def export_csv():
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        writer.writerow(["time", "agent", "query", "response"])
-        for h in st.session_state.history:
-            writer.writerow([h["time"], h["agent"], h["query"], h["response"]])
-        return buf.getvalue().encode("utf-8")
-
-    def export_docx():
-        doc = Document()
-        doc.add_heading("Sentinel Session Export", level=1)
-        doc.add_paragraph(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        doc.add_paragraph("")
-        for h in st.session_state.history:
-            doc.add_heading(f"{h['time']} — {h['agent'].upper()}", level=2)
-            doc.add_paragraph(f"Query: {h['query']}")
-            doc.add_paragraph(h["response"])
-            doc.add_paragraph("")
-        b = io.BytesIO()
-        doc.save(b)
-        return b.getvalue()
-
-    colx1, colx2, colx3 = st.columns(3)
-    with colx1:
-        st.download_button("TXT", data=export_txt(), file_name="sentinel_session.txt", mime="text/plain", use_container_width=True)
-    with colx2:
-        st.download_button("CSV", data=export_csv(), file_name="sentinel_session.csv", mime="text/csv", use_container_width=True)
-    with colx3:
-        st.download_button("DOCX", data=export_docx(), file_name="sentinel_session.docx",
-                           mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                           use_container_width=True)
-
-    st.markdown("---")
-    # Full Reset (logic + UI)
-    if st.button("🔁 Start New Search", use_container_width=True):
-        with st.spinner("🧠 Resetting Sentinel…"):
-            time.sleep(0.8)
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.success("✅ Ready for a fresh session")
-            time.sleep(0.4)
-            st.experimental_rerun()
-
-# ----------------------------
-# Helpers
-# ----------------------------
-def run_agent(agent: str, query: str):
-    """Run a specific agent safely (prevents 4x repeats)."""
+# =========================================================
+# Core Agent Runner
+# =========================================================
+def run_agent(agent, query):
     if st.session_state.is_running:
         return
     st.session_state.is_running = True
     start = time.time()
 
-    with st.spinner(f"Running {agent.upper()}…"):
+    with st.spinner(f"Running {agent.upper()}..."):
         try:
-            # call your orchestrator script
             result = subprocess.run(
                 ["python", "sentinal_orchestrator.py", agent, query],
                 capture_output=True, text=True, check=True
             )
-            raw = result.stdout or ""
-            # Clean artifacts & accidental repeats
-            lines = [ln for ln in raw.splitlines() if ln.strip()]
-            output = "\n".join(lines).strip()
+            # clean duplicate lines
+            output = "\n".join([ln for ln in result.stdout.splitlines() if ln.strip()])
             duration = round(time.time() - start, 2)
 
-            # Render bubble
             st.markdown(
-                f"<div class='bubble' style='background:{AGENTS[agent]['color']};'>"
-                f"<b>{agent.upper()} says:</b><br><br>{output.replace(chr(10), '<br>')}"
-                f"<br><small>⏱️ {duration}s</small></div>",
-                unsafe_allow_html=True
+                f"<div class='bubble {agent}'><b>{agent.upper()}:</b><br>{output.replace(chr(10), '<br>')}"
+                f"<br><small>⏱ {duration}s</small></div>", unsafe_allow_html=True
             )
 
-            # Save history
             st.session_state.history.append({
-                "time": datetime.now().strftime("%H:%M:%S"),
-                "agent": agent,
-                "query": query,
-                "response": output
+                "agent": agent, "query": query,
+                "response": output,
+                "time": datetime.now().strftime("%H:%M:%S")
             })
             st.session_state.last_agent = agent
             st.session_state.last_response = output
-
-            # Suggest next in chain
-            idx = SEQUENCE.index(agent)
-            st.session_state.next_agent = SEQUENCE[idx + 1] if idx + 1 < len(SEQUENCE) else None
+            idx = AGENT_SEQUENCE.index(agent)
+            st.session_state.next_agent = AGENT_SEQUENCE[idx+1] if idx+1 < len(AGENT_SEQUENCE) else None
 
         except subprocess.CalledProcessError as e:
-            err = e.stderr or e.stdout or "Unknown error"
-            st.markdown(
-                f"<div class='bubble' style='background:#dc3545;'>"
-                f"<b>{agent.upper()} error:</b><br><br>{err.replace(chr(10), '<br>')}"
-                f"</div>",
-                unsafe_allow_html=True
-            )
+            st.error(f"⚠ Agent Error: {e.stderr or e.stdout or 'Unknown issue'}")
         finally:
             st.session_state.is_running = False
 
-# ----------------------------
-# Main Body (two columns)
-# ----------------------------
-left, right = st.columns([7, 5])
-
-with left:
-    st.subheader("Compose")
-    st.session_state.user_query = st.text_area(
-        "Your prompt", value=st.session_state.user_query, placeholder="e.g., Map the industrial decarbonization ecosystem in Canada"
+# =========================================================
+# Main UI
+# =========================================================
+st.markdown("### 💬 Conversation")
+st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
+for h in st.session_state.history[-10:]:
+    st.markdown(
+        f"<div class='bubble {h['agent']}'><b>{h['agent'].upper()}:</b><br>{h['response'].replace(chr(10), '<br>')}</div>",
+        unsafe_allow_html=True
     )
+st.markdown("</div>", unsafe_allow_html=True)
 
-    if st.button("🚀 Run Agent", use_container_width=True):
-        if st.session_state.user_query.strip():
-            run_agent(start_agent, st.session_state.user_query.strip())
-        else:
-            st.warning("Please enter a query first.")
+# Input area (static)
+st.markdown("<div class='input-area'>", unsafe_allow_html=True)
+agent = st.selectbox("Choose an agent:", AGENT_SEQUENCE)
+query = st.text_area("Type your prompt here:", key="user_query", placeholder="Ask your agent something...")
 
-    st.markdown("### Conversation")
-    chat_box = st.container()
-    with chat_box:
-        st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
-        # Only render last 10 interactions for speed
-        for h in st.session_state.history[-10:]:
-            st.markdown(
-                f"<div class='bubble' style='background:{AGENTS[h['agent']]['color']};'>"
-                f"<b>{h['agent'].upper()} ({h['time']}):</b><br><br>{h['response'].replace(chr(10), '<br>')}"
-                f"</div>", unsafe_allow_html=True
-            )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-with right:
-    st.subheader("Follow-up / Next")
-    if st.session_state.last_agent and st.session_state.last_response:
-        st.write(f"**Last agent:** {st.session_state.last_agent.upper()}")
-        st.write(f"**Next recommended:** {(st.session_state.next_agent or '—').upper() if st.session_state.next_agent else '—'}")
-
-        st.session_state.follow_up = st.text_area(
-            "Follow-up (optional)",
-            value=st.session_state.follow_up,
-            placeholder="e.g., Summarize the top 3 investable themes and key players.",
-            height=140
-        )
-
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("💬 Ask Same Agent", use_container_width=True):
-                if st.session_state.follow_up.strip():
-                    combined = f"{st.session_state.last_response}\n\nFollow-up: {st.session_state.follow_up.strip()}"
-                    run_agent(st.session_state.last_agent, combined)
-                else:
-                    st.warning("Enter a follow-up first.")
-        with c2:
-            if st.session_state.next_agent and st.button(f"➡️ Send to {st.session_state.next_agent.upper()}", use_container_width=True):
-                # pass context forward
-                context = (
-                    f"Context from {st.session_state.last_agent.upper()}:\n"
-                    f"{st.session_state.last_response}\n\n"
-                    f"New instructions: {st.session_state.follow_up.strip() or 'Continue the workflow using this context.'}"
-                )
-                run_agent(st.session_state.next_agent, context)
+cols = st.columns([1,1])
+if cols[0].button("💬 Ask Same Agent", use_container_width=True):
+    if query.strip(): run_agent(agent, query)
+    else: st.warning("Please enter a query first.")
+if cols[1].button(f"➡ Send to {st.session_state.get('next_agent','NEXT').upper()}", use_container_width=True):
+    if query.strip():
+        next_agent = st.session_state.get("next_agent") or agent
+        run_agent(next_agent, query)
     else:
-        st.info("Run an agent to enable follow-up and chaining.")
+        st.warning("Please enter a query first.")
+st.markdown("</div>", unsafe_allow_html=True)
+
+# =========================================================
+# Reset / New Session
+# =========================================================
+st.markdown("<hr>", unsafe_allow_html=True)
+col1, col2, col3 = st.columns([1,2,1])
+with col2:
+    if st.button("🔁 Start New Search", use_container_width=True):
+        with st.spinner("🧠 Clearing session and resetting Sentinel..."):
+            time.sleep(1)
+            for k in list(st.session_state.keys()):
+                del st.session_state[k]
+            st.success("✅ Ready for a fresh search!")
+            time.sleep(0.8)
+            st.experimental_rerun()
