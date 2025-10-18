@@ -147,43 +147,55 @@ def run_agent(agent, query):
 # =========================================================
 # Main UI
 # =========================================================
-st.markdown("### 💬 Conversation")
+# =========================================================
+# Main Chat Interface
+# =========================================================
+
+# Scrollable chat history (keeps old answers visible)
+st.markdown("### 🧠 Sentinel Console")
 st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
-for h in st.session_state.history[-10:]:
-    st.markdown(
-        f"<div class='bubble {h['agent']}'><b>{h['agent'].upper()}:</b><br>{h['response'].replace(chr(10), '<br>')}</div>",
-        unsafe_allow_html=True
-    )
+if st.session_state.history:
+    for h in st.session_state.history[-10:]:
+        st.markdown(
+            f"<div class='bubble {h['agent']}'><b>{h['agent'].upper()}:</b><br>{h['response'].replace(chr(10), '<br>')}</div>",
+            unsafe_allow_html=True
+        )
+else:
+    st.markdown("<p style='color:#666;'>No conversations yet. Start by asking an agent below.</p>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
-# Input area (static)
+# =========================================================
+# Static Input Area (like ChatGPT)
+# =========================================================
 st.markdown("<div class='input-area'>", unsafe_allow_html=True)
+
 agent = st.selectbox("Choose an agent:", AGENT_SEQUENCE)
 query = st.text_area("Type your prompt here:", key="user_query", placeholder="Ask your agent something...")
 
-cols = st.columns([1,1])
-if cols[0].button("💬 Ask Same Agent", use_container_width=True):
-    if query.strip(): run_agent(agent, query)
-    else: st.warning("Please enter a query first.")
-if cols[1].button(f"➡ Send to {st.session_state.get('next_agent','NEXT').upper()}", use_container_width=True):
+# Dynamic button section
+col1, col2 = st.columns([1, 1])
+
+# Ask same agent
+ask_clicked = col1.button("💬 Ask Same Agent", use_container_width=True)
+
+# Only show "Next Agent" if available
+next_agent = st.session_state.get("next_agent")
+next_button_label = f"➡ Send to {next_agent.upper()}" if next_agent else "➡ Send to Next Agent"
+next_clicked = col2.button(next_button_label, use_container_width=True)
+
+# Handle interactions
+if ask_clicked:
     if query.strip():
-        next_agent = st.session_state.get("next_agent") or agent
-        run_agent(next_agent, query)
+        run_agent(agent, query)
     else:
         st.warning("Please enter a query first.")
-st.markdown("</div>", unsafe_allow_html=True)
 
-# =========================================================
-# Reset / New Session
-# =========================================================
-st.markdown("<hr>", unsafe_allow_html=True)
-col1, col2, col3 = st.columns([1,2,1])
-with col2:
-    if st.button("🔁 Start New Search", use_container_width=True):
-        with st.spinner("🧠 Clearing session and resetting Sentinel..."):
-            time.sleep(1)
-            for k in list(st.session_state.keys()):
-                del st.session_state[k]
-            st.success("✅ Ready for a fresh search!")
-            time.sleep(0.8)
-            st.experimental_rerun()
+if next_clicked:
+    if next_agent and query.strip():
+        run_agent(next_agent, query)
+    elif not next_agent:
+        st.warning("No next agent available — start with STRATA.")
+    else:
+        st.warning("Please enter a query first.")
+
+st.markdown("</div>", unsafe_allow_html=True)
