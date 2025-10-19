@@ -1,13 +1,16 @@
-# app.py — Sentinel Beta UI v2.0
+# app.py — Sentinel Beta v2.1
 # ---------------------------------------
-# Clean layout + stable chat UX for demo
-# Works with existing sentinal_orchestrator.py
+# - Typewriter "SENTINEL" header (intel aesthetic)
+# - Visible red input caret
+# - Conversational per-agent threads
+# - All 5 agents wired (strata → dealhawk → neo → cipher → proforma)
+# - OCR-safe PDF/DOCX parsing
 
 import io, os, time, subprocess
 from datetime import datetime
 import streamlit as st
 
-# ---------- Optional parsers ----------
+# ---------- OPTIONAL PARSERS ----------
 try:
     import pdfplumber
 except Exception:
@@ -28,6 +31,8 @@ st.set_page_config(page_title="Sentinel", layout="wide")
 # ---------- THEME ----------
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@600&display=swap');
+
 :root {
   --bg:#111418; --surface:#171A1F; --card:#1E232B;
   --text:#F5F5F5; --muted:#9BA1A9; --accent:#E63946;
@@ -35,41 +40,89 @@ st.markdown("""
 }
 html,body,[class*="css"]{
   background:var(--bg)!important; color:var(--text)!important;
-  font-family:Inter,system-ui,sans-serif;
+  font-family:'Source Code Pro',monospace;
 }
-.block-container{padding-top:2rem; padding-bottom:8rem;}
+.block-container{padding-top:1rem; padding-bottom:7rem;}
 hr{border:0; height:1px; background:var(--border);}
-.s-title{text-align:center; font-size:42px; font-weight:900; letter-spacing:1.5px; margin:0;}
-.s-underline{width:160px; height:3px; margin:8px auto 6px auto;
-  background:linear-gradient(90deg,var(--accent),#f47f7f); border-radius:2px;}
-.s-status{text-align:center; color:var(--muted); font-size:13px; margin-bottom:8px;}
+.stTextArea textarea {
+  background:var(--surface);
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:8px;
+  height:80px;
+  caret-color: var(--text); /* visible caret fix */
+}
+.stButton>button {
+  background:var(--accent);
+  color:#fff;
+  border:0;
+  border-radius:8px;
+  height:38px;
+  font-weight:600;
+}
+.stButton>button:hover {
+  filter:brightness(1.15);
+}
+
+/* Animated SENTINEL header */
+.typewriter {
+  font-weight:600;
+  font-size:46px;
+  color:var(--accent);
+  overflow:hidden;
+  border-right:.15em solid var(--accent);
+  white-space:nowrap;
+  margin:0 auto;
+  letter-spacing:.12em;
+  animation:typing 2.5s steps(20,end), blink-caret .75s step-end infinite;
+}
+@keyframes typing { from{width:0} to{width:100%} }
+@keyframes blink-caret { from,to{border-color:transparent} 50%{border-color:var(--accent);} }
+.s-subtext {
+  text-align:center; color:var(--muted); font-size:13px; margin-top:4px;
+  letter-spacing:1px;
+}
+
+/* Chat */
 .chat-wrap{background:var(--card); border:1px solid var(--border);
-  border-radius:12px; padding:16px 18px; height:65vh;
-  overflow-y:auto; scroll-behavior:smooth;}
+  border-radius:12px; padding:16px 18px; height:65vh; overflow-y:auto;}
 .chat-bubble{background:rgba(30,35,43,.95); border:1px solid var(--border);
-  border-left:4px solid var(--accent); border-radius:10px;
-  padding:12px 14px; margin:10px 0; line-height:1.55; animation:fadeIn .3s ease;}
+  border-left:4px solid var(--accent); border-radius:10px; padding:12px 14px;
+  margin:10px 0; line-height:1.55; animation:fadeIn .3s ease;}
 .chat-bubble.error{border-left-color:#ff6b6b;}
 .meta{color:var(--muted); font-size:11px; margin-top:4px;}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
-.static-footer{position:fixed; left:0; right:0; bottom:0;
-  background:var(--surface); border-top:2px solid var(--accent);
-  box-shadow:0 -3px 12px rgba(0,0,0,.4); z-index:9999;}
-.footer-inner{max-width:1100px; margin:0 auto; padding:10px 16px;
-  display:flex; gap:10px; align-items:flex-end;}
+
+.static-footer{position:fixed;left:0;right:0;bottom:0;
+  background:var(--surface);border-top:2px solid var(--accent);
+  box-shadow:0 -3px 12px rgba(0,0,0,.4);z-index:9999;}
+.footer-inner{max-width:1100px;margin:0 auto;padding:10px 16px;
+  display:flex;gap:10px;align-items:flex-end;}
 .footer-left{flex:1;}
-.footer-right{width:260px; display:flex; flex-direction:column; gap:8px;}
-.stTextArea textarea{background:var(--surface); color:var(--text);
-  border:1px solid var(--border); border-radius:8px; height:80px;}
-.stButton>button{background:var(--accent); color:#fff; border:0; border-radius:8px; height:36px;}
-.stButton>button:hover{filter:brightness(1.1);}
+.footer-right{width:260px;display:flex;flex-direction:column;gap:8px;}
 </style>
 """, unsafe_allow_html=True)
 
+# ---------- HEADER ----------
+st.markdown("""
+<div style='text-align:center; margin-top:10px;'>
+  <div class='typewriter'>SENTINEL</div>
+  <div class='s-subtext'>Autonomous Intelligence for Private Markets</div>
+</div>
+<hr/>
+""", unsafe_allow_html=True)
+
 # ---------- STATE ----------
-defaults = {"threads": {}, "context": "", "last_agent": "strata", "is_running": False}
-for k, v in defaults.items():
-    st.session_state.setdefault(k, v)
+if "threads" not in st.session_state:
+    st.session_state["threads"] = {}
+if "context" not in st.session_state:
+    st.session_state["context"] = ""
+if "last_agent" not in st.session_state:
+    st.session_state["last_agent"] = "strata"
+if "is_running" not in st.session_state:
+    st.session_state["is_running"] = False
+if "prompt" not in st.session_state:
+    st.session_state["prompt"] = ""
 
 AGENTS = {
     "strata": "Research & intelligence for energy/decarbonization.",
@@ -78,17 +131,8 @@ AGENTS = {
     "cipher": "Governance, PII scrub, policy checks.",
     "proforma": "Formatting and exports for IC memos."
 }
-
-if not st.session_state["threads"]:
-    st.session_state["threads"] = {a: [] for a in AGENTS}
-
-# ---------- HEADER ----------
-st.markdown(f"""
-<div class='s-title'>SENTINEL</div>
-<div class='s-underline'></div>
-<div class='s-status'>ACTIVE AGENT: <b>{st.session_state['last_agent'].upper()}</b></div>
-<hr/>
-""", unsafe_allow_html=True)
+for a in AGENTS:
+    st.session_state["threads"].setdefault(a, [])
 
 # ---------- SIDEBAR ----------
 st.sidebar.markdown("### ⚙️ Orchestrator")
@@ -98,8 +142,9 @@ st.session_state["last_agent"] = agent
 st.sidebar.caption(AGENTS[agent])
 st.sidebar.markdown("---")
 
-files = st.sidebar.file_uploader("📎 Upload files (PDF/DOCX)", type=["pdf", "docx"],
-                                 accept_multiple_files=True)
+files = st.sidebar.file_uploader("📎 Upload files (PDF/DOCX)",
+                                 type=["pdf", "docx"], accept_multiple_files=True)
+
 def _pdf_text(b: bytes) -> str:
     text = ""
     if pdfplumber:
@@ -140,13 +185,13 @@ if st.session_state["context"]:
 
 if st.sidebar.button("🔁 Reset Session", use_container_width=True):
     st.session_state.clear()
-    st.experimental_rerun()
+    st.rerun()
 
-# ---------- CHAT WINDOW ----------
+# ---------- CHAT DISPLAY ----------
 st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
 thread = st.session_state["threads"][agent]
 if thread:
-    for item in thread[-12:]:
+    for item in thread[-15:]:
         css_extra = " error" if item.get("error") else ""
         st.markdown(
             f"""<div class="chat-bubble{css_extra}">
@@ -186,13 +231,13 @@ def run_agent(agent_key: str, user_q: str):
             output = f"⚠️ {e}"
             is_error = True
 
-    st.session_state["threads"][agent].append({
+    st.session_state["threads"][agent_key].append({
         "agent": agent_key, "query": user_q,
         "response": output, "time": datetime.now().strftime("%H:%M:%S"),
         "error": is_error
     })
     st.session_state["is_running"] = False
-    st.experimental_rerun()
+    st.rerun()
 
 # ---------- FOOTER ----------
 st.markdown("""
@@ -208,11 +253,17 @@ left = st.empty()
 right = st.empty()
 
 with left.container():
-    user_q = st.text_area("Type your prompt here:", key="prompt",
-                          placeholder="Ask Sentinel...", height=80)
+    st.session_state["prompt"] = st.text_area(
+        "Type your prompt here:",
+        value=st.session_state["prompt"],
+        key="prompt_box",
+        placeholder="Ask Sentinel...",
+        height=80
+    )
 
 with right.container():
     send = st.button("💬 Ask Agent", use_container_width=True)
 
-if send and user_q.strip() and not st.session_state["is_running"]:
-    run_agent(agent, user_q.strip())
+if send and st.session_state["prompt"].strip() and not st.session_state["is_running"]:
+    run_agent(agent, st.session_state["prompt"].strip())
+    st.session_state["prompt"] = ""
