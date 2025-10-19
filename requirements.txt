@@ -1,16 +1,16 @@
-# --- Core ---
-streamlit==1.38.0          # stable UI build; supports st.rerun()
-openai==1.42.0             # required to remove 'proxies' arg error
-httpx==0.27.0              # compatible with OpenAI >=1.40
+# --- Core (UI + Orchestrator) ---
+streamlit==1.38.0           # stable UI build; supports st.rerun(), modern layout
+openai==1.42.0              # current OpenAI SDK; fixes proxy + auth issues
+httpx==0.27.0               # compatible with OpenAI >=1.40
+python-dotenv==1.0.1        # load .env credentials (OPENAI_API_KEY, model)
 
-# --- File parsing ---
-python-docx==1.1.2
-pdfplumber==0.11.4
-pdf2image==1.17.0          # for OCR fallback
-pytesseract==0.3.10        # OCR engine wrapper
-pillow==10.4.0             # image handling for OCR
+# --- File Parsing + OCR (Optional but safe to include) ---
+python-docx==1.1.2          # DOCX parsing
+pdfplumber==0.11.4          # PDF text extraction
+pdf2image==1.17.0           # PDF to image for OCR fallback
+pytesseract==0.3.10         # OCR engine wrapper (requires tesseract-ocr system pkg)
+pillow==10.4.0              # image handling for OCR
 
-# --- Environment ---
-python-dotenv==1.0.1
-
-
+# --- Notes ---
+# For OCR support, Render buildCommand must include:
+# apt-get update && apt-get install -y tesseract-ocr poppler-utils
