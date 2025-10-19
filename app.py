@@ -373,6 +373,8 @@ Decoding layer of Sentinel — composes final IC materials and ensures complianc
 
 # ---------- Keyboard Shortcut ----------
 st.markdown("""
+# ---------- Keyboard Shortcut ----------
+st.markdown("""
 <script>
 (function(){
   const root = window.parent.document;
@@ -381,4 +383,9 @@ st.markdown("""
       const btns = Array.from(root.querySelectorAll('button'));
       const ask = btns.find(b => b.innerText.trim().toLowerCase().includes('ask agent'));
       if (ask) ask.click();
-     
+      e.preventDefault();
+    }
+  }, false);
+})();
+</script>
+""", unsafe_allow_html=True)
