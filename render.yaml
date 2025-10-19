@@ -11,7 +11,13 @@ services:
     envVars:
       - key: OPENAI_API_KEY
         sync: false
+      - key: OPENAI_MODEL
+        value: "gpt-4o"              # default if not set in .env
       - key: STREAMLIT_SERVER_HEADLESS
         value: "true"
       - key: PYTHONUNBUFFERED
         value: "1"
+      - key: STREAMLIT_SERVER_ENABLECORS
+        value: "false"              # avoids CORS warnings in Render logs
+      - key: STREAMLIT_BROWSER_GATHER_USAGE_STATS
+        value: "false"              # disables telemetry
