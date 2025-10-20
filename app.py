@@ -1,37 +1,33 @@
-# app.py — Sentinel v2.9 (Render Stable Build)
-# --------------------------------------------
+# app.py — Sentinel v2.9.2
+# ------------------------------------------
 # Longbow Capital | Sentinel Platform
 # Autonomous Agents for Asymmetric Advantage
 #
-# ✅ Stable dark UI (dot-grid background)
-# ✅ Typewriter header (Courier New)
-# ✅ Correct chain order (Strata → Dealhawk → Neo → Pro Forma → Cipher)
-# ✅ Guarded subprocess call (prevents startup crash)
-# ✅ Render-ready (no flashing grey screen)
-# ✅ Health-safe minimal boot output
-# ✅ PDF/DOCX parsing and iterative agent chat
+# ✅ Clean dark UI (no white header)
+# ✅ Fixed header animation (no blinking line)
+# ✅ Correct agent chain and subprocess guard
+# ✅ OCR + file parsing support
+# ✅ Agent overview panel and session memory
 
 import io, os, sys, json, time, subprocess
 from datetime import datetime
 import streamlit as st
 
-# --- Sentinel startup diagnostics ---
-def log(msg):
-    print(f"[Sentinel Boot] {msg}", flush=True)
-
-log("Initializing Sentinel app.py ...")
-
 # ---------- Optional parsers ----------
 try:
     import pdfplumber
+except Exception:
+    pdfplumber = None
+try:
     from pdf2image import convert_from_bytes
     import pytesseract
-    from docx import Document
     OCR_AVAILABLE = True
-    log("✅ All parsers loaded successfully.")
-except Exception as e:
+except Exception:
     OCR_AVAILABLE = False
-    log(f"⚠️ Parser import warning: {e}")
+try:
+    from docx import Document
+except Exception:
+    Document = None
 
 # ---------- Page config ----------
 st.set_page_config(page_title="Sentinel", layout="wide")
@@ -43,6 +39,13 @@ st.markdown("""
   --bg:#121212; --surface:#171A1F; --card:#1E232B;
   --text:#F8F8F8; --muted:#A0A6AD; --accent:#E63946; --border:#2C313A;
 }
+
+/* 🔧 Remove Streamlit top bar + toolbar */
+[data-testid="stHeader"], header, body > header {display:none!important;}
+[data-testid="stToolbar"] {display:none!important;}
+html, body {margin:0!important; padding:0!important; overflow-x:hidden!important;}
+
+/* 🖤 Global background + typography */
 [data-testid="stAppViewContainer"], html, body {
   background-color: var(--bg)!important;
   background-image:
@@ -52,71 +55,133 @@ st.markdown("""
   color:var(--text)!important;
   font-family:'Courier New', monospace;
 }
-.block-container{padding-top:0.25rem; padding-bottom:5.5rem; background-color:transparent!important;}
-[data-testid="stSidebar"]{
-  background-color:#15181c; border-right:1px solid var(--border);
+
+.block-container {
+  padding-top:0.25rem;
+  padding-bottom:5.5rem;
+  background-color:transparent!important;
+  margin-top:-20px;
+}
+
+/* 🧭 Sidebar */
+[data-testid="stSidebar"] {
+  background-color:#15181c;
+  border-right:1px solid var(--border);
   padding:1rem 1rem 1.25rem 1rem;
 }
-[data-testid="stSidebar"] h3,[data-testid="stSidebar"] label{
-  color:var(--accent)!important; font-weight:600;
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] label {
+  color:var(--accent)!important;
+  font-weight:600;
 }
+
+/* 📎 File uploader tweaks */
 [data-testid="stFileUploader"] label,
 [data-testid="stFileUploader"] span,
-[data-testid="stFileUploader"] p{
+[data-testid="stFileUploader"] p {
   color:#e6e6e6!important; font-weight:500;
 }
-[data-testid="stFileUploader"] svg{
+[data-testid="stFileUploader"] svg {
   color:var(--accent)!important; opacity:0.9;
 }
-[data-testid="stFileUploaderFileName"]{color:#f5f5f5!important; font-weight:600;}
-[data-testid="stFileUploaderFileDetails"]{color:#d0d0d0!important;}
-.stTextArea textarea{
-  background:var(--surface); color:var(--text);
-  border:1px solid var(--border); border-radius:8px; height:80px;
+[data-testid="stFileUploaderFileName"] {color:#f5f5f5!important; font-weight:600;}
+[data-testid="stFileUploaderFileDetails"] {color:#d0d0d0!important;}
+
+/* 💬 Input box */
+.stTextArea textarea {
+  background:var(--surface);
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:8px;
+  height:80px;
   caret-color: var(--text);
   transition: all 0.2s ease;
 }
-.stTextArea textarea:hover{
-  border-color: #8B0000; box-shadow: 0 0 8px #8B000033;
+.stTextArea textarea:hover {
+  border-color:#8B0000;
+  box-shadow:0 0 8px #8B000033;
 }
-.stButton>button{
-  background:var(--accent); color:#fff; border:0; border-radius:8px;
-  height:38px; font-weight:600;
+
+/* 🚀 Buttons */
+.stButton>button {
+  background:var(--accent);
+  color:#fff;
+  border:0;
+  border-radius:8px;
+  height:38px;
+  font-weight:600;
+  transition:all 0.15s ease;
 }
-.stButton>button:hover{ filter:brightness(1.12); }
-.chat-wrap{
-  background:var(--card); border:1px solid var(--border);
-  border-radius:12px; padding:16px 18px; height:64vh; overflow-y:auto;
+.stButton>button:hover { filter:brightness(1.12); transform:translateY(-1px); }
+
+/* 🧱 Chat interface */
+.chat-wrap {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:16px 18px;
+  height:64vh;
+  overflow-y:auto;
 }
-.chat-wrap:empty{display:none!important;}
-.chat-bubble{
-  background:rgba(32,37,44,.95); border:1px solid var(--border);
-  border-left:4px solid var(--accent); border-radius:10px;
-  padding:12px 14px; margin:10px 0; line-height:1.55;
-  color:var(--text)!important; animation:fadeIn .3s ease;
+.chat-wrap:empty {display:none!important;}
+.chat-bubble {
+  background:rgba(32,37,44,.95);
+  border:1px solid var(--border);
+  border-left:4px solid var(--accent);
+  border-radius:10px;
+  padding:12px 14px;
+  margin:10px 0;
+  line-height:1.55;
+  color:var(--text)!important;
+  animation:fadeIn .3s ease;
 }
-.meta{color:var(--muted); font-size:11px; margin-top:4px;}
-@keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
-.static-footer{position:fixed; left:0; right:0; bottom:0;
-  background:var(--surface); border-top:2px solid var(--accent);
-  box-shadow:0 -3px 12px rgba(0,0,0,.4); z-index:9999;}
-.footer-inner{max-width:1100px; margin:0 auto; padding:10px 16px;
-  display:flex; gap:10px; align-items:flex-end;}
-.footer-left{flex:1;} .footer-right{width:300px; display:flex; flex-direction:column; gap:8px;}
-.header-container{text-align:center; margin-top:20px; margin-bottom:12px; font-family:'Courier New', monospace;}
-.typewriter-title{display:inline-block; overflow:hidden; white-space:nowrap;
-  border-right:.15em solid var(--accent); color:var(--accent);
-  font-weight:700; font-size:46px; letter-spacing:.08em;
-  animation:typingTitle 2.6s steps(30,end), blink-caret .75s step-end infinite;
-  animation-fill-mode:forwards;}
-.typewriter-tagline{display:block; overflow:hidden; white-space:nowrap;
-  border-right:.15em solid var(--accent); color:var(--muted);
-  font-size:14px; letter-spacing:.06em; margin-top:6px;
-  animation:typingTag 3.4s steps(40,end) 2.8s, blink-caret .75s step-end infinite 2.8s;
-  animation-fill-mode:forwards;}
-@keyframes typingTitle{from{width:0}to{width:100%}}
-@keyframes typingTag{from{width:0}to{width:100%}}
-@keyframes blink-caret{from,to{border-color:transparent}50%{border-color:var(--accent);}}
+.meta {color:var(--muted); font-size:11px; margin-top:4px;}
+@keyframes fadeIn {from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+/* 📜 Footer */
+.static-footer {
+  position:fixed; left:0; right:0; bottom:0;
+  background:var(--surface);
+  border-top:2px solid var(--accent);
+  box-shadow:0 -3px 12px rgba(0,0,0,.4);
+  z-index:9999;
+}
+.footer-inner {
+  max-width:1100px; margin:0 auto; padding:10px 16px;
+  display:flex; gap:10px; align-items:flex-end;
+}
+.footer-left{flex:1;}
+.footer-right{width:300px; display:flex; flex-direction:column; gap:8px;}
+
+/* 🪶 Header (typing animation without blinking) */
+.header-container {
+  text-align:center;
+  margin-top:10px;
+  margin-bottom:12px;
+  font-family:'Courier New', monospace;
+}
+.typewriter-title {
+  display:inline-block;
+  overflow:hidden;
+  white-space:nowrap;
+  color:var(--accent);
+  font-weight:700;
+  font-size:46px;
+  letter-spacing:.08em;
+  animation:typingTitle 2.6s steps(30,end);
+}
+.typewriter-tagline {
+  display:block;
+  overflow:hidden;
+  white-space:nowrap;
+  color:var(--muted);
+  font-size:14px;
+  letter-spacing:.06em;
+  margin-top:6px;
+  animation:typingTag 3.4s steps(40,end) 2.8s;
+}
+@keyframes typingTitle {from{width:0}to{width:100%}}
+@keyframes typingTag {from{width:0}to{width:100%}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -160,6 +225,7 @@ st.sidebar.caption(AGENTS[agent])
 st.sidebar.markdown("---")
 files = st.sidebar.file_uploader("📎 Upload files (PDF/DOCX)", type=["pdf","docx"], accept_multiple_files=True)
 
+# ---------- File parsers ----------
 def _pdf_text(b):
     t=""
     if pdfplumber:
@@ -175,7 +241,7 @@ def _pdf_text(b):
     return t.strip()
 
 def _docx_text(b):
-    if not 'Document' in globals(): return ""
+    if not Document: return ""
     try:
         doc=Document(io.BytesIO(b)); return "\n".join(p.text for p in doc.paragraphs)
     except: return ""
@@ -203,64 +269,49 @@ def _compose(user_q:str)->str:
 
 # ---------- Agent Runner ----------
 def run_agent(agent_key: str, user_q: str):
-    """Safely run the orchestrator subprocess."""
-    if st.session_state.get("is_running"):
-        return
+    """Safely run orchestrator subprocess"""
+    if st.session_state.get("is_running"): return
     if not agent_key or not user_q.strip():
         print("[Sentinel] ⚠️ Skipping subprocess call — missing agent or query.")
         return
 
     st.session_state["is_running"] = True
     q = _compose(user_q)
-    output = ""
-    is_error = False
+    output = ""; is_error = False
 
     st.toast(f"Routing to agent: {agent_key.upper()}...", icon="🛰️")
     print(f"[Sentinel] 🛰️ Running agent {agent_key} with query length {len(q)}")
 
     try:
-        res = subprocess.run(
-            ["python", "sentinal_orchestrator.py", agent_key, q],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=90
-        )
+        res = subprocess.run(["python","sentinal_orchestrator.py", agent_key, q],
+                             capture_output=True, text=True, check=False, timeout=90)
         output = (res.stdout or "").strip() or (res.stderr or "").strip()
     except Exception as e:
-        output = f"⚠️ Execution error: {e}"
-        is_error = True
+        output = f"⚠️ Execution error: {e}"; is_error = True
 
-    if "threads" not in st.session_state:
-        st.session_state["threads"] = {}
-    if agent_key not in st.session_state["threads"]:
-        st.session_state["threads"][agent_key] = []
+    if "threads" not in st.session_state: st.session_state["threads"] = {}
+    if agent_key not in st.session_state["threads"]: st.session_state["threads"][agent_key] = []
     st.session_state["threads"][agent_key].append({
-        "agent": agent_key,
-        "query": user_q,
-        "response": output,
-        "time": datetime.now().strftime("%H:%M:%S"),
-        "error": is_error
+        "agent": agent_key, "query": user_q, "response": output,
+        "time": datetime.now().strftime("%H:%M:%S"), "error": is_error
     })
     st.session_state["is_running"] = False
     st.rerun()
 
-# ---------- Chat Display ----------
+# ---------- Chat ----------
 thread = st.session_state["threads"][agent]
 if thread:
     st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
     for item in thread[-15:]:
         css_extra = " error" if item.get("error") else ""
         cleaned = item["response"]
-        st.markdown(f"""
-        <div class="chat-bubble{css_extra}">
-            <b>{item['agent'].upper()}</b><br>{cleaned.replace(chr(10), '<br>')}
-            <div class="meta">⏱ {item['time']}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f"""<div class="chat-bubble{css_extra}">
+                <b>{item['agent'].upper()}</b><br>{cleaned.replace(chr(10), '<br>')}
+                <div class="meta">⏱ {item['time']}</div></div>""", unsafe_allow_html=True
+        )
     st.markdown('</div>', unsafe_allow_html=True)
-else:
-    st.info("🛰️ Sentinel ready — choose an agent and enter a prompt below.")
+st.markdown("<div style='height:36px;'></div>", unsafe_allow_html=True)
 
 # ---------- Footer ----------
 st.markdown("""
@@ -268,7 +319,6 @@ st.markdown("""
   <div class='footer-left'></div><div class='footer-right'></div>
 </div></div>
 """, unsafe_allow_html=True)
-
 left,right=st.empty(),st.empty()
 with left.container():
     st.session_state["prompt"]=st.text_area("Type your prompt here:",
@@ -289,10 +339,20 @@ if ask_btn:
 elif send_next_btn and nxt:
     if st.session_state["threads"][agent]:
         last_resp = st.session_state["threads"][agent][-1]["response"]
-        summary = last_resp[:5000]
+        summary = last_resp
         time.sleep(0.4)
         run_agent(nxt, summary)
     else:
         st.warning("No output to pass forward from the current agent.")
 
-log("✅ Sentinel app fully initialized.")
+# ---------- Overview ----------
+with st.expander("🧠 Sentinel Agent Overview — Roles & Prompting Guide", expanded=False):
+    st.markdown("""
+**SENTINEL** coordinates autonomous agents for private-market intelligence and decision analysis in energy transition & industrials.
+
+- **STRATA** — market mapping  
+- **DEALHAWK** — deal sourcing  
+- **NEO** — financial modeling  
+- **PRO FORMA NON GRATA (PFNG)** — risk calibration  
+- **CIPHER** — governance and IC synthesis  
+""")
