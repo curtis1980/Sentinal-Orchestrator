@@ -1,8 +1,7 @@
-# app.py — Sentinel v3.1.3 (UI Alignment & Stability)
+# app.py — Sentinel v3.1.4 (Command Center Layout)
 # -----------------------------------------------------------
-# Fixes: full-width layout issue, misplaced expanders, slow intro,
-# always-visible chat space, static footer alignment, no breadcrumb.
-# Keeps overlay spinner + static red footer line.
+# Moves input + Ask Agent + Send buttons to the top, aligns layout,
+# removes fixed footer, and preserves cinematic "espionage" aesthetic.
 
 import io, os, json, time, subprocess, re
 from datetime import datetime
@@ -30,26 +29,25 @@ st.markdown("""
   --text:#F8F8F8; --muted:#A0A6AD; --accent:#E63946; --border:#2C313A;
 }
 
-/* Remove Streamlit UI chrome */
+/* Remove Streamlit chrome */
 [data-testid="stHeader"], header, body>header, [data-testid="stToolbar"], [data-testid="stSidebar"] {
   display:none!important;
 }
-html,body{margin:0!important;padding:0!important;overflow-x:hidden!important;}
-
-/* Global background + typography */
-[data-testid="stAppViewContainer"], html, body {
+html, body {margin:0!important; padding:0!important; overflow-x:hidden!important;}
+[data-testid="stAppViewContainer"] {
   background-color:var(--bg)!important;
-  background-image:radial-gradient(#00000022 1px,transparent 1px),linear-gradient(180deg,#0f0f0f 0%,#171717 100%);
-  background-size:18px 18px,100% 100%;
+  background-image:radial-gradient(#00000022 1px, transparent 1px),
+                    linear-gradient(180deg, #0f0f0f 0%, #171717 100%);
+  background-size:18px 18px, 100% 100%;
   color:var(--text)!important;
-  font-family:'Courier New',monospace;
+  font-family:'Courier New', monospace;
 }
 
-/* Centered inner content */
+/* Center wrapper */
 .content-inner {
   max-width:1100px;
   margin:0 auto;
-  padding:0 1.2rem 6rem;
+  padding:0 1.2rem 4rem;
 }
 
 /* Header */
@@ -66,19 +64,43 @@ html,body{margin:0!important;padding:0!important;overflow-x:hidden!important;}
   color:var(--muted); font-size:14px; letter-spacing:.06em; margin-top:6px;
   animation:fadeInTag 1.6s ease forwards; animation-delay:4.7s;
 }
-@keyframes typingTitle {from{width:0}to{width:100%}}
-@keyframes fadeInTag {from{opacity:0}to{opacity:1}}
+@keyframes typingTitle {from{width:0} to{width:100%}}
+@keyframes fadeInTag {from{opacity:0} to{opacity:1}}
 
-/* Agent selector */
-.toolbar {display:flex;align-items:center;justify-content:space-between;margin:8px 0 12px;}
+/* Agent bar */
+.toolbar {
+  display:flex; align-items:center; justify-content:space-between;
+  margin:8px 0 12px;
+}
 .agent-select {max-width:320px;}
-.version-label {color:var(--muted);font-size:12px;}
+.version-label {color:var(--muted); font-size:12px;}
 
-/* Chat area */
+/* Command bar */
+.command-bar {
+  display:flex; align-items:flex-end; gap:10px; margin-bottom:16px;
+}
+.command-bar .stTextArea textarea {
+  background:var(--surface); color:var(--text);
+  border:1px solid var(--border); border-radius:8px; height:80px;
+  caret-color:var(--text); transition:all .2s ease;
+}
+.command-bar .stTextArea textarea:hover {
+  border-color:#8B0000; box-shadow:0 0 8px #8B000033;
+}
+.command-bar .stButton>button {
+  background:var(--accent); color:#fff; border:0; border-radius:8px;
+  height:38px; font-weight:600; transition:all .15s ease;
+}
+.command-bar .stButton>button:hover {
+  filter:brightness(1.12); transform:translateY(-1px);
+}
+.command-bar .stButton>button:disabled {opacity:.6; cursor:not-allowed; transform:none;}
+
+/* Chat */
 .chat-wrap {
   background:var(--card); border:1px solid var(--border);
-  border-radius:12px; padding:16px 18px; min-height:50vh;
-  overflow-y:auto; margin-bottom:40px;
+  border-radius:12px; padding:16px 18px; height:65vh;
+  overflow-y:auto; margin-bottom:30px;
 }
 .chat-bubble {
   background:rgba(32,37,44,.95); border:1px solid var(--border);
@@ -90,41 +112,6 @@ html,body{margin:0!important;padding:0!important;overflow-x:hidden!important;}
 .meta {color:var(--muted); font-size:11px; margin-top:4px;}
 .placeholder {color:var(--muted); font-style:italic; text-align:center; margin-top:20vh;}
 @keyframes fadeIn {from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
-
-/* Inputs & buttons */
-.stTextArea textarea {
-  background:var(--surface); color:var(--text);
-  border:1px solid var(--border); border-radius:8px; height:80px;
-  caret-color:var(--text); transition:all .2s ease;
-}
-.stTextArea textarea:hover {border-color:#8B0000; box-shadow:0 0 8px #8B000033;}
-.stButton>button {
-  background:var(--accent); color:#fff; border:0; border-radius:8px;
-  height:38px; font-weight:600; transition:all .15s ease;
-}
-.stButton>button:hover {filter:brightness(1.12); transform:translateY(-1px);}
-.stButton>button:disabled {opacity:.6; cursor:not-allowed; transform:none;}
-@media(max-width:800px){
-  .footer-inner{flex-wrap:wrap;justify-content:center;gap:6px;}
-}
-
-/* Static footer */
-.static-footer {
-  position:fixed; bottom:0; left:0; right:0;
-  background:var(--surface); border-top:3px solid var(--accent);
-  box-shadow:0 -3px 12px rgba(0,0,0,.4); z-index:9999;
-}
-.footer-inner {
-  max-width:1100px; margin:0 auto; padding:10px 16px;
-  display:flex; gap:10px; align-items:flex-end;
-}
-
-/* Spinner overlay */
-.loading-overlay {
-  position:fixed; top:0; left:0; right:0; bottom:0;
-  background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center;
-  color:#fff; font-size:18px; font-weight:600; z-index:9998; backdrop-filter:blur(3px);
-}
 
 /* Status chip */
 .status-chip {
@@ -139,6 +126,13 @@ html,body{margin:0!important;padding:0!important;overflow-x:hidden!important;}
   animation:pulse 1.2s ease-in-out infinite;
 }
 @keyframes pulse {0%,100%{opacity:.4}50%{opacity:1}}
+
+/* Overlay spinner */
+.loading-overlay {
+  position:fixed; top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center;
+  color:#fff; font-size:18px; font-weight:600; z-index:9998; backdrop-filter:blur(3px);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -151,7 +145,7 @@ st.markdown("""
 <hr/>
 """, unsafe_allow_html=True)
 
-# ---------- Session state ----------
+# ---------- Session ----------
 defaults={"threads":{},"context":"","last_agent":"strata","next_agent":"dealhawk","is_running":False,"active_agent":None,"prompt":""}
 for k,v in defaults.items(): st.session_state.setdefault(k,v)
 
@@ -170,19 +164,7 @@ def _recompute_next():
     try:i=AGENT_SEQUENCE.index(cur);st.session_state["next_agent"]=AGENT_SEQUENCE[i+1] if i+1<len(AGENT_SEQUENCE) else None
     except ValueError:st.session_state["next_agent"]=None
 
-# ---------- Main content wrapper ----------
-st.markdown("<div class='content-inner'>", unsafe_allow_html=True)
-
-# ---------- Agent selector ----------
-colL,colR=st.columns([4,1])
-with colL:
-    agent=st.selectbox("Choose agent",AGENT_SEQUENCE,index=AGENT_SEQUENCE.index(st.session_state["last_agent"]),key="agent_select")
-    st.session_state["last_agent"]=agent;_recompute_next()
-    st.caption(AGENTS[agent])
-with colR:
-    st.markdown("<div class='version-label' style='text-align:right;'>v3.1.3</div>",unsafe_allow_html=True)
-
-# ---------- Compose helpers ----------
+# ---------- Helpers ----------
 def _compose(user_q:str)->str:
     ctx=(st.session_state.get("context") or "").strip()
     prior=st.session_state["threads"][agent][-5:]
@@ -208,6 +190,32 @@ def _extract_summary(resp:str,fallback_len:int=1600)->str:
 
 def _cap(text:str,limit:int=8000)->str:
     return text if len(text)<=limit else text[:limit-20]+" …[truncated]"
+
+# ---------- Main Content ----------
+st.markdown("<div class='content-inner'>", unsafe_allow_html=True)
+
+# Agent bar
+colA, colB = st.columns([4,1])
+with colA:
+    agent=st.selectbox("Choose agent",AGENT_SEQUENCE,index=AGENT_SEQUENCE.index(st.session_state["last_agent"]))
+    st.session_state["last_agent"]=agent; _recompute_next()
+    st.caption(AGENTS[agent])
+with colB:
+    st.markdown("<div class='version-label' style='text-align:right;'>v3.1.4</div>",unsafe_allow_html=True)
+
+# Command bar
+st.markdown("<div class='command-bar'>", unsafe_allow_html=True)
+col1,col2,col3 = st.columns([6,2,2])
+with col1:
+    st.session_state["prompt"]=st.text_area("Type your prompt:",value=st.session_state.get("prompt",""),
+                                            key="prompt_box",placeholder=f"Ask {agent.capitalize()}…",height=80)
+with col2:
+    ask_btn=st.button("💬 Ask Agent",use_container_width=True,disabled=st.session_state.get("is_running",False))
+with col3:
+    nxt=st.session_state.get("next_agent")
+    send_btn=st.button(f"➡ Send to {nxt.upper()}" if nxt else "No Next",use_container_width=True,
+                       disabled=(nxt is None or st.session_state.get("is_running",False)))
+st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------- Agent runner ----------
 def run_agent(agent_key:str,user_q:str):
@@ -236,7 +244,7 @@ def run_agent(agent_key:str,user_q:str):
     })
     st.session_state["is_running"]=False; st.session_state["active_agent"]=None; st.rerun()
 
-# ---------- Status chip & overlay ----------
+# ---------- Status + overlay ----------
 if st.session_state.get("is_running") and st.session_state.get("active_agent"):
     st.markdown(f"<div class='status-chip'><span class='status-dot'></span>🛰 Accessing <b>{st.session_state['active_agent'].upper()}</b>…</div>",unsafe_allow_html=True)
     st.markdown("<div class='loading-overlay'>🛰 Running agent…</div>",unsafe_allow_html=True)
@@ -252,7 +260,7 @@ if thread:
         st.markdown(f"""
         <div class="{bubble_class}">
           <b>{m['agent'].upper()}</b><br>{resp}
-          <div class="meta">⏱ {m['time']}  ·  ~{approx_tokens} tokens est</div>
+          <div class="meta">⏱ {m['time']} · ~{approx_tokens} tokens est</div>
         </div>""",unsafe_allow_html=True)
     st.markdown('</div>',unsafe_allow_html=True)
 else:
@@ -260,7 +268,6 @@ else:
 
 # ---------- Attach Context ----------
 with st.expander("📎 Attach Context (PDF/DOCX)", expanded=False):
-    st.caption("Attach up to 3 files • 10 MB each • text merged & trimmed to 10 000 chars")
     uploads=st.file_uploader("Upload files",type=["pdf","docx"],accept_multiple_files=True,label_visibility="collapsed")
     def _pdf_text(b:bytes)->str:
         t=""
@@ -284,8 +291,6 @@ with st.expander("📎 Attach Context (PDF/DOCX)", expanded=False):
     if uploads:
         chunks=[]
         for f in uploads[:3]:
-            if hasattr(f,"size") and f.size>10*1024*1024:
-                st.warning(f"Skipping {f.name}: >10MB"); continue
             data=f.getvalue()
             txt=_pdf_text(data) if f.name.lower().endswith(".pdf") else _docx_text(data)
             if txt: chunks.append(txt)
@@ -296,43 +301,22 @@ with st.expander("📎 Attach Context (PDF/DOCX)", expanded=False):
 with st.expander("🧠 Sentinel Agent Overview — Roles & Prompting Guide", expanded=False):
     st.markdown("""
 **SENTINEL** coordinates autonomous agents for private-market intelligence and decision analysis across energy transition & industrials.  
-Iterate with each agent before hand-off for cleaner context.
 
 ### 🧭 STRATA — Market Mapping  
-**Try:** “Map emerging U.S. midstream decarbonization subsectors.”  
-*Output:* Markdown hierarchy + sourcing filters.
+“Map emerging U.S. midstream decarbonization subsectors.”  
 
 ### 🦅 DEALHAWK — Deal Sourcing  
-**Try:** “Find five late-stage private grid-modernization firms in Texas.”  
-*Output:* Company list + top 3 to advance.
+“Find five late-stage private grid-modernization firms in Texas.”  
 
 ### 🧮 NEO — Financial Modeling  
-**Try:** “Translate Strata’s findings into a base-case P&L for 2025–2030.”  
-*Output:* Scenario analysis with drivers.
+“Translate Strata’s findings into a base-case P&L for 2025–2030.”  
 
-### ⚖️ PRO FORMA NON GRATA (PFNG) — Critical Review  
-**Try:** “Run PFNG on Neo’s summary; assign RIS and counterfactuals.”  
-*Output:* Risk memo with RIS + counterfactuals.
+### ⚖️ PRO FORMA NON GRATA (PFNG)  
+“Run PFNG on Neo’s summary; assign RIS and counterfactuals.”  
 
 ### 🔐 CIPHER — IC Assembly  
-**Try:** “/profile ArcLight Energy Systems Ltd.”  
-*Output:* Governance-ready IC brief.
+“/profile ArcLight Energy Systems Ltd.”
 """)
-
-# ---------- Static Footer ----------
-st.markdown("<div class='static-footer'><div class='footer-inner'>",unsafe_allow_html=True)
-col1,col2,col3=st.columns([5,2,2])
-with col1:
-    st.session_state["prompt"]=st.text_area("Type your prompt:",
-        value=st.session_state.get("prompt",""),
-        key="prompt_box",placeholder=f"Ask {agent.capitalize()}…",height=80)
-with col2:
-    ask_btn=st.button("💬 Ask Agent",use_container_width=True,disabled=st.session_state.get("is_running",False))
-with col3:
-    nxt=st.session_state.get("next_agent")
-    send_btn=st.button(f"➡ Send to {nxt.upper()}" if nxt else "No Next",use_container_width=True,
-                       disabled=(nxt is None or st.session_state.get("is_running",False)))
-st.markdown("</div></div>",unsafe_allow_html=True)
 
 # ---------- Actions ----------
 user_q=(st.session_state.get("prompt") or "").strip()
@@ -349,15 +333,14 @@ elif send_btn and nxt:
     else:
         st.warning("No output to pass forward from the current agent.")
 
-# ---------- Auto-focus text area ----------
+# ---------- Autofocus ----------
 st.markdown("""
 <script>
 setTimeout(()=>{const ta=window.parent.document.querySelector('textarea');
-if(ta){ta.focus();}},500);
+if(ta){ta.focus();}},400);
 const el=window.parent.document.querySelector('#chatwrap');
 if(el){el.scrollTo({top:el.scrollHeight,behavior:'smooth'});}
 </script>
-""",unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# ---------- Close wrapper ----------
 st.markdown("</div>", unsafe_allow_html=True)
