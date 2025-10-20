@@ -243,7 +243,7 @@ if not st.session_state["entry_done"]:
             st.markdown("<div style='color:#9AA3AD;text-align:center;'>✅ PFNG NODE ONLINE</div>", unsafe_allow_html=True); time.sleep(0.3)
             st.markdown("<div style='color:#9AA3AD;text-align:center;'>✅ CIPHER SECURE CHANNEL</div>", unsafe_allow_html=True); time.sleep(0.4)
     st.session_state["entry_done"] = True
-    st.experimental_rerun()
+    st.rerun()
 
 # ---------- HEADER ----------
 st.markdown("""
@@ -440,3 +440,4 @@ if(el){el.scrollTo({top:el.scrollHeight, behavior:'smooth'});}
 
 # ---------- Close content wrapper ----------
 st.markdown("</div>", unsafe_allow_html=True)
+
