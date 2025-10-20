@@ -1,25 +1,28 @@
-# render.yaml — Sentinel Orchestrator Deployment
-# ----------------------------------------------
-# Deploys Streamlit app with orchestrator subprocess support on Render.
+# render.yaml — Sentinel Orchestrator Deployment (Phase 2.1)
+# ----------------------------------------------------------
+# Streamlit + OpenAI app for Longbow Capital.
+# Includes OCR system packages, extended health check, and environment variables.
 
 services:
   - type: web
     name: sentinal-orchestrator
     env: python
     plan: free
-    region: oregon  # or closest to your team
+    region: oregon
     buildCommand: |
+      apt-get update && apt-get install -y tesseract-ocr poppler-utils
       pip install --upgrade pip
       pip install -r requirements.txt
     startCommand: |
       streamlit run app.py --server.port $PORT --server.address 0.0.0.0
     envVars:
       - key: OPENAI_API_KEY
-        sync: false         # set this manually in Render dashboard (Environment tab)
+        sync: false              # Add manually in Render dashboard
       - key: OPENAI_MODEL
-        value: gpt-4o       # fallback default
-    autoDeploy: true
+        value: gpt-4o
     healthCheckPath: /
+    healthCheckTimeout: 180      # allows longer startup time (3 minutes)
+    autoDeploy: true
     disk:
       name: sentinal-cache
       mountPath: /data
