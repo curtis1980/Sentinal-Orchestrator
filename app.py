@@ -7,6 +7,26 @@ from datetime import datetime
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="Sentinel", layout="wide")
 
+# ---------- Add scroll-fade CSS ----------
+st.markdown("""
+<style>
+.chat-fade {
+  position:relative;
+}
+.chat-fade::after {
+  content:"";
+  position:absolute;
+  bottom:0;
+  left:0;
+  width:100%;
+  height:20px;
+  pointer-events:none;
+  background:linear-gradient(to top, #0d0f12 0%, transparent 100%);
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 # ---------- SESSION DEFAULTS ----------
 defaults = {
     "threads": {},
@@ -235,3 +255,9 @@ elif send_btn and nxt:
         run_agent(nxt, last[:1600])
     else:
         st.warning("No output to send.")
+
+# ---------- RESET SESSION ----------
+st.markdown("<hr style='border:0;border-top:1px solid #2C313A;margin:10px 0;'>", unsafe_allow_html=True)
+if st.button("🔁 Reset Session", use_container_width=True):
+    st.session_state.clear()
+    st.rerun()
