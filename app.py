@@ -1,13 +1,8 @@
-# app.py — Sentinel v3.1.2 (Final UI Baseline)
+# app.py — Sentinel v3.1.3 (UI Alignment & Stability)
 # -----------------------------------------------------------
-# Stable espionage UI + interaction polish:
-# - Full-width layout (no sidebar)
-# - Slower SENTINEL typewriter intro
-# - Inline agent selector, hover descriptions
-# - Chat auto-scroll + error bubble styling
-# - Context uploader & prompting guide below chat
-# - Centered "in progress" overlay spinner
-# - Mobile-safe footer buttons, confirm reset
+# Fixes: full-width layout issue, misplaced expanders, slow intro,
+# always-visible chat space, static footer alignment, no breadcrumb.
+# Keeps overlay spinner + static red footer line.
 
 import io, os, json, time, subprocess, re
 from datetime import datetime
@@ -15,7 +10,7 @@ import streamlit as st
 
 # ---------- Optional parsers ----------
 try: import pdfplumber
-except Exception: pdfplumber = None
+except Exception: pdfplumber=None
 try:
     from pdf2image import convert_from_bytes
     import pytesseract
@@ -35,100 +30,115 @@ st.markdown("""
   --text:#F8F8F8; --muted:#A0A6AD; --accent:#E63946; --border:#2C313A;
 }
 
-/* Remove all Streamlit chrome */
-[data-testid="stHeader"], header, body>header, [data-testid="stToolbar"], [data-testid="stSidebar"]{
+/* Remove Streamlit UI chrome */
+[data-testid="stHeader"], header, body>header, [data-testid="stToolbar"], [data-testid="stSidebar"] {
   display:none!important;
 }
 html,body{margin:0!important;padding:0!important;overflow-x:hidden!important;}
 
-/* Background + typography */
-[data-testid="stAppViewContainer"], html, body{
+/* Global background + typography */
+[data-testid="stAppViewContainer"], html, body {
   background-color:var(--bg)!important;
   background-image:radial-gradient(#00000022 1px,transparent 1px),linear-gradient(180deg,#0f0f0f 0%,#171717 100%);
   background-size:18px 18px,100% 100%;
   color:var(--text)!important;
   font-family:'Courier New',monospace;
 }
-.block-container{padding-top:0.25rem;padding-bottom:6rem;margin-top:-20px;}
+
+/* Centered inner content */
+.content-inner {
+  max-width:1100px;
+  margin:0 auto;
+  padding:0 1.2rem 6rem;
+}
 
 /* Header */
-.header-container{text-align:center;margin-top:10px;margin-bottom:8px;}
-.typewriter-title{
-  display:inline-block;overflow:hidden;white-space:nowrap;
-  color:var(--accent);font-weight:700;font-size:46px;letter-spacing:.08em;
-  animation:typingTitle 4s steps(40,end) forwards;
+.header-container {
+  text-align:center; margin-top:10px; margin-bottom:8px;
 }
-.typewriter-tagline{
-  opacity:0;display:block;white-space:nowrap;
-  color:var(--muted);font-size:14px;letter-spacing:.06em;margin-top:6px;
-  animation:fadeInTag 1.6s ease forwards;animation-delay:4.2s;
+.typewriter-title {
+  display:inline-block; overflow:hidden; white-space:nowrap;
+  color:var(--accent); font-weight:700; font-size:46px; letter-spacing:.08em;
+  animation:typingTitle 4.5s steps(40,end) forwards;
 }
-@keyframes typingTitle{from{width:0}to{width:100%}}
-@keyframes fadeInTag{from{opacity:0}to{opacity:1}}
+.typewriter-tagline {
+  opacity:0; display:block; white-space:nowrap;
+  color:var(--muted); font-size:14px; letter-spacing:.06em; margin-top:6px;
+  animation:fadeInTag 1.6s ease forwards; animation-delay:4.7s;
+}
+@keyframes typingTitle {from{width:0}to{width:100%}}
+@keyframes fadeInTag {from{opacity:0}to{opacity:1}}
 
-/* Agent selector row */
-.toolbar{display:flex;align-items:center;justify-content:space-between;margin:8px 0 12px;}
-.agent-select label{font-weight:600;color:var(--accent)!important;}
-.version-label{color:var(--muted);font-size:12px;}
+/* Agent selector */
+.toolbar {display:flex;align-items:center;justify-content:space-between;margin:8px 0 12px;}
+.agent-select {max-width:320px;}
+.version-label {color:var(--muted);font-size:12px;}
 
 /* Chat area */
-.chat-wrap{
-  background:var(--card);border:1px solid var(--border);
-  border-radius:12px;padding:16px 18px;height:64vh;overflow-y:auto;margin-bottom:60px;
+.chat-wrap {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:12px; padding:16px 18px; min-height:50vh;
+  overflow-y:auto; margin-bottom:40px;
 }
-.chat-wrap:empty{display:none!important;}
-.chat-bubble{
-  background:rgba(32,37,44,.95);border:1px solid var(--border);
-  border-left:4px solid var(--accent);border-radius:10px;
-  padding:12px 14px;margin:10px 0;line-height:1.55;color:var(--text)!important;
-  animation:fadeIn .3s ease;
+.chat-bubble {
+  background:rgba(32,37,44,.95); border:1px solid var(--border);
+  border-left:4px solid var(--accent); border-radius:10px;
+  padding:12px 14px; margin:10px 0; line-height:1.55;
+  color:var(--text)!important; animation:fadeIn .3s ease;
 }
-.chat-bubble.error-bubble{border-left:4px solid #FFB703;background:#2a1c1c;}
-.meta{color:var(--muted);font-size:11px;margin-top:4px;}
-@keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+.chat-bubble.error-bubble {border-left:4px solid #FFB703;background:#2a1c1c;}
+.meta {color:var(--muted); font-size:11px; margin-top:4px;}
+.placeholder {color:var(--muted); font-style:italic; text-align:center; margin-top:20vh;}
+@keyframes fadeIn {from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
 
 /* Inputs & buttons */
-.stTextArea textarea{
-  background:var(--surface);color:var(--text);
-  border:1px solid var(--border);border-radius:8px;height:80px;
-  caret-color:var(--text);transition:all .2s ease;
+.stTextArea textarea {
+  background:var(--surface); color:var(--text);
+  border:1px solid var(--border); border-radius:8px; height:80px;
+  caret-color:var(--text); transition:all .2s ease;
 }
-.stTextArea textarea:hover{border-color:#8B0000;box-shadow:0 0 8px #8B000033;}
-.stButton>button{
-  background:var(--accent);color:#fff;border:0;border-radius:8px;
-  height:38px;font-weight:600;transition:all .15s ease;
+.stTextArea textarea:hover {border-color:#8B0000; box-shadow:0 0 8px #8B000033;}
+.stButton>button {
+  background:var(--accent); color:#fff; border:0; border-radius:8px;
+  height:38px; font-weight:600; transition:all .15s ease;
 }
-.stButton>button:hover{filter:brightness(1.12);transform:translateY(-1px);}
-.stButton>button:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+.stButton>button:hover {filter:brightness(1.12); transform:translateY(-1px);}
+.stButton>button:disabled {opacity:.6; cursor:not-allowed; transform:none;}
 @media(max-width:800px){
   .footer-inner{flex-wrap:wrap;justify-content:center;gap:6px;}
 }
 
 /* Static footer */
-.static-footer{
-  position:fixed;bottom:0;left:0;right:0;
-  background:var(--surface);border-top:3px solid var(--accent);
-  box-shadow:0 -3px 12px rgba(0,0,0,.4);z-index:9999;
+.static-footer {
+  position:fixed; bottom:0; left:0; right:0;
+  background:var(--surface); border-top:3px solid var(--accent);
+  box-shadow:0 -3px 12px rgba(0,0,0,.4); z-index:9999;
 }
-.footer-inner{
-  max-width:1100px;margin:0 auto;padding:10px 16px;
-  display:flex;gap:10px;align-items:flex-end;
+.footer-inner {
+  max-width:1100px; margin:0 auto; padding:10px 16px;
+  display:flex; gap:10px; align-items:flex-end;
 }
 
 /* Spinner overlay */
-.loading-overlay{
-  position:fixed;top:0;left:0;right:0;bottom:0;
-  background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;
-  color:#fff;font-size:18px;font-weight:600;z-index:9998;backdrop-filter:blur(3px);
+.loading-overlay {
+  position:fixed; top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center;
+  color:#fff; font-size:18px; font-weight:600; z-index:9998; backdrop-filter:blur(3px);
 }
 
 /* Status chip */
-.status-chip{position:fixed;top:10px;right:14px;background:#1f242b;
-  border:1px solid var(--border);color:#fff;padding:6px 10px;border-radius:999px;
-  font-size:12px;box-shadow:0 2px 10px rgba(0,0,0,.25);z-index:10000;}
-.status-dot{width:8px;height:8px;display:inline-block;border-radius:50%;
-  background:var(--accent);margin-right:6px;animation:pulse 1.2s ease-in-out infinite;}
-@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+.status-chip {
+  position:fixed; top:10px; right:14px; background:#1f242b;
+  border:1px solid var(--border); color:#fff; padding:6px 10px;
+  border-radius:999px; font-size:12px;
+  box-shadow:0 2px 10px rgba(0,0,0,.25); z-index:10000;
+}
+.status-dot {
+  width:8px; height:8px; display:inline-block; border-radius:50%;
+  background:var(--accent); margin-right:6px;
+  animation:pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {0%,100%{opacity:.4}50%{opacity:1}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -160,16 +170,19 @@ def _recompute_next():
     try:i=AGENT_SEQUENCE.index(cur);st.session_state["next_agent"]=AGENT_SEQUENCE[i+1] if i+1<len(AGENT_SEQUENCE) else None
     except ValueError:st.session_state["next_agent"]=None
 
-# ---------- Agent select inline ----------
+# ---------- Main content wrapper ----------
+st.markdown("<div class='content-inner'>", unsafe_allow_html=True)
+
+# ---------- Agent selector ----------
 colL,colR=st.columns([4,1])
 with colL:
     agent=st.selectbox("Choose agent",AGENT_SEQUENCE,index=AGENT_SEQUENCE.index(st.session_state["last_agent"]),key="agent_select")
     st.session_state["last_agent"]=agent;_recompute_next()
     st.caption(AGENTS[agent])
 with colR:
-    st.markdown("<div class='version-label' style='text-align:right;'>v3.1.2</div>",unsafe_allow_html=True)
+    st.markdown("<div class='version-label' style='text-align:right;'>v3.1.3</div>",unsafe_allow_html=True)
 
-# ---------- Compose prompt ----------
+# ---------- Compose helpers ----------
 def _compose(user_q:str)->str:
     ctx=(st.session_state.get("context") or "").strip()
     prior=st.session_state["threads"][agent][-5:]
@@ -242,12 +255,8 @@ if thread:
           <div class="meta">⏱ {m['time']}  ·  ~{approx_tokens} tokens est</div>
         </div>""",unsafe_allow_html=True)
     st.markdown('</div>',unsafe_allow_html=True)
-    st.markdown("""
-    <script>
-    const el=window.parent.document.querySelector('#chatwrap');
-    if(el){el.scrollTo({top:el.scrollHeight,behavior:'smooth'});}
-    </script>
-    """,unsafe_allow_html=True)
+else:
+    st.markdown('<div class="chat-wrap"><div class="placeholder">No messages yet.</div></div>',unsafe_allow_html=True)
 
 # ---------- Attach Context ----------
 with st.expander("📎 Attach Context (PDF/DOCX)", expanded=False):
@@ -298,7 +307,7 @@ Iterate with each agent before hand-off for cleaner context.
 *Output:* Company list + top 3 to advance.
 
 ### 🧮 NEO — Financial Modeling  
-**Try:** “Translate Strata’s findings into a base-case P&L for 2025-2030.”  
+**Try:** “Translate Strata’s findings into a base-case P&L for 2025–2030.”  
 *Output:* Scenario analysis with drivers.
 
 ### ⚖️ PRO FORMA NON GRATA (PFNG) — Critical Review  
@@ -340,10 +349,15 @@ elif send_btn and nxt:
     else:
         st.warning("No output to pass forward from the current agent.")
 
-# ---------- Auto-focus back on textarea ----------
+# ---------- Auto-focus text area ----------
 st.markdown("""
 <script>
 setTimeout(()=>{const ta=window.parent.document.querySelector('textarea');
 if(ta){ta.focus();}},500);
+const el=window.parent.document.querySelector('#chatwrap');
+if(el){el.scrollTo({top:el.scrollHeight,behavior:'smooth'});}
 </script>
 """,unsafe_allow_html=True)
+
+# ---------- Close wrapper ----------
+st.markdown("</div>", unsafe_allow_html=True)
