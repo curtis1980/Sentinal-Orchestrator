@@ -1,5 +1,5 @@
-# ---------- Sentinel v3.3.1 — Espionage Console ----------
-# Fade intro • Centered agent select • Scroll-fade chat • Safe rerun • Reset session
+# ---------- Sentinel v3.3.2 — Espionage Console ----------
+# Dark fade intro • Centered agent select • Safe rerun • Fixed threads init • Streamlined visuals
 
 import io, os, sys, json, time, subprocess, streamlit as st
 from datetime import datetime
@@ -43,6 +43,11 @@ for k, v in defaults.items():
 if st.session_state.get("is_running", False):
     st.session_state["is_running"] = False
 
+# ✅ Initialize empty threads for all agents
+for a in ["strata", "dealhawk", "neo", "proforma", "cipher"]:
+    if a not in st.session_state["threads"]:
+        st.session_state["threads"][a] = []
+
 # ---------- AGENT DEFINITIONS ----------
 AGENTS = {
     "strata": "Research & intelligence for energy/decarbonization.",
@@ -69,28 +74,53 @@ if not st.session_state.get("entry_done", False):
     with placeholder.container():
         st.markdown("""
         <style>
-        @keyframes fadeOut {0%{opacity:1;}90%{opacity:0;}100%{opacity:0;display:none;}}
-        body {background-color:#0E0F11;}
+        body {
+            background-color:#0B0C0F !important;
+            color:#F8F8F8;
+            overflow:hidden;
+        }
+        @keyframes fadeOut {
+            0% {opacity:1;}
+            90% {opacity:0;}
+            100% {opacity:0; visibility:hidden;}
+        }
+        #boot-seq {
+            animation: fadeOut 1.6s ease-out 3.2s forwards;
+        }
         </style>
-        <div id="boot-seq" style="height:70vh;display:flex;flex-direction:column;
-             justify-content:center;align-items:center;text-align:center;
-             animation:fadeOut 1.6s ease-out 3.2s forwards;">
-          <div style="font-size:40px;color:#E63946;letter-spacing:.10em;
-                      font-weight:800;margin-bottom:8px;">SENTINEL</div>
-          <div style="color:#A8B2BD;font-size:14px;letter-spacing:.06em;">
-              AUTHENTICATING SESSION…
-          </div>
-          <div style="margin-top:36px;color:#A4B8C9;font-size:13px;
-                      text-align:left;line-height:1.6;">
-            🛰 INITIALIZING NODES…<br>
-            <span style="color:#48FF7F;">✅ STRATA NODE ONLINE</span><br>
-            <span style="color:#48FF7F;">✅ DEALHAWK NODE ONLINE</span><br>
-            <span style="color:#48FF7F;">✅ NEO NODE ONLINE</span><br>
-            <span style="color:#48FF7F;">✅ PFNG NODE ONLINE</span><br>
-            <span style="color:#48FF7F;">✅ CIPHER SECURE CHANNEL</span>
-          </div>
+
+        <div id="boot-seq" style="
+            height:100vh;
+            display:flex;
+            flex-direction:column;
+            justify-content:center;
+            align-items:center;
+            text-align:center;
+            background:radial-gradient(circle at 50% 20%, #11131a 0%, #090a0c 80%);
+            font-family:'Courier New', monospace;">
+            
+            <div style="font-size:42px;color:#E63946;letter-spacing:.10em;
+                        font-weight:800;margin-bottom:12px;">
+                SENTINEL
+            </div>
+
+            <div style="color:#A8B2BD;font-size:14px;letter-spacing:.08em;
+                        margin-bottom:22px;">
+                AUTHENTICATING SESSION…
+            </div>
+
+            <div style="margin-top:10px;color:#9AA6B1;font-size:13px;
+                        text-align:left;line-height:1.7;">
+                🛰 INITIALIZING NODES…<br>
+                <span style="color:#48FF7F;">✅ STRATA NODE ONLINE</span><br>
+                <span style="color:#48FF7F;">✅ DEALHAWK NODE ONLINE</span><br>
+                <span style="color:#48FF7F;">✅ NEO NODE ONLINE</span><br>
+                <span style="color:#48FF7F;">✅ PFNG NODE ONLINE</span><br>
+                <span style="color:#48FF7F;">✅ CIPHER SECURE CHANNEL</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
+
     time.sleep(4.8)
     st.session_state["entry_done"] = True
     st.rerun()
@@ -109,7 +139,7 @@ st.markdown("""
 <hr style="border:0;border-top:1px solid #2C313A;margin:8px 0 14px;">
 """, unsafe_allow_html=True)
 
-# ---------- AGENT SELECTOR (Option A) ----------
+# ---------- AGENT SELECTOR ----------
 st.markdown("""
 <style>
 div[data-testid="stSelectbox"] > div:first-child {
