@@ -1,23 +1,26 @@
+# render.yaml — Sentinel Orchestrator Deployment
+# ----------------------------------------------
+# Deploys Streamlit app with orchestrator subprocess support on Render.
+
 services:
   - type: web
-    name: sentinel
+    name: sentinal-orchestrator
     env: python
     plan: free
+    region: oregon  # or closest to your team
     buildCommand: |
-      apt-get update && apt-get install -y tesseract-ocr poppler-utils
       pip install --upgrade pip
       pip install -r requirements.txt
-    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0
+    startCommand: |
+      streamlit run app.py --server.port $PORT --server.address 0.0.0.0
     envVars:
       - key: OPENAI_API_KEY
-        sync: false
+        sync: false         # set this manually in Render dashboard (Environment tab)
       - key: OPENAI_MODEL
-        value: "gpt-4o"              # default if not set in .env
-      - key: STREAMLIT_SERVER_HEADLESS
-        value: "true"
-      - key: PYTHONUNBUFFERED
-        value: "1"
-      - key: STREAMLIT_SERVER_ENABLECORS
-        value: "false"              # avoids CORS warnings in Render logs
-      - key: STREAMLIT_BROWSER_GATHER_USAGE_STATS
-        value: "false"              # disables telemetry
+        value: gpt-4o       # fallback default
+    autoDeploy: true
+    healthCheckPath: /
+    disk:
+      name: sentinal-cache
+      mountPath: /data
+      sizeGB: 1
