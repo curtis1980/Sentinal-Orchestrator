@@ -1,35 +1,22 @@
-# app.py — Sentinel v2.9.2
-# ------------------------------------------
-# Longbow Capital | Sentinel Platform
-# Autonomous Agents for Asymmetric Advantage
-#
-# ✅ Clean dark UI (no white header)
-# ✅ Fixed header animation (no blinking line)
-# ✅ Correct agent chain and subprocess guard
-# ✅ OCR + file parsing support
-# ✅ Agent overview panel and session memory
+# app.py — Sentinel v3.0
+# -----------------------------------------------------------
+# Adds: synchronized tagline animation, static footer,
+# horizontal "processing" bar, and restored prompting guide.
 
 import io, os, sys, json, time, subprocess
 from datetime import datetime
 import streamlit as st
 
-# ---------- Optional parsers ----------
-try:
-    import pdfplumber
-except Exception:
-    pdfplumber = None
+try: import pdfplumber
+except: pdfplumber=None
 try:
     from pdf2image import convert_from_bytes
     import pytesseract
-    OCR_AVAILABLE = True
-except Exception:
-    OCR_AVAILABLE = False
-try:
-    from docx import Document
-except Exception:
-    Document = None
+    OCR_AVAILABLE=True
+except: OCR_AVAILABLE=False
+try: from docx import Document
+except: Document=None
 
-# ---------- Page config ----------
 st.set_page_config(page_title="Sentinel", layout="wide")
 
 # ---------- CSS ----------
@@ -40,12 +27,12 @@ st.markdown("""
   --text:#F8F8F8; --muted:#A0A6AD; --accent:#E63946; --border:#2C313A;
 }
 
-/* 🔧 Remove Streamlit top bar + toolbar */
+/* Remove Streamlit top bar */
 [data-testid="stHeader"], header, body > header {display:none!important;}
 [data-testid="stToolbar"] {display:none!important;}
 html, body {margin:0!important; padding:0!important; overflow-x:hidden!important;}
 
-/* 🖤 Global background + typography */
+/* Base background */
 [data-testid="stAppViewContainer"], html, body {
   background-color: var(--bg)!important;
   background-image:
@@ -56,132 +43,76 @@ html, body {margin:0!important; padding:0!important; overflow-x:hidden!important
   font-family:'Courier New', monospace;
 }
 
-.block-container {
-  padding-top:0.25rem;
-  padding-bottom:5.5rem;
-  background-color:transparent!important;
-  margin-top:-20px;
-}
+.block-container {padding-top:0.25rem; padding-bottom:6rem; margin-top:-20px;}
 
-/* 🧭 Sidebar */
-[data-testid="stSidebar"] {
-  background-color:#15181c;
-  border-right:1px solid var(--border);
-  padding:1rem 1rem 1.25rem 1rem;
-}
-[data-testid="stSidebar"] h3,
-[data-testid="stSidebar"] label {
-  color:var(--accent)!important;
-  font-weight:600;
-}
-
-/* 📎 File uploader tweaks */
-[data-testid="stFileUploader"] label,
-[data-testid="stFileUploader"] span,
-[data-testid="stFileUploader"] p {
-  color:#e6e6e6!important; font-weight:500;
-}
-[data-testid="stFileUploader"] svg {
-  color:var(--accent)!important; opacity:0.9;
-}
-[data-testid="stFileUploaderFileName"] {color:#f5f5f5!important; font-weight:600;}
-[data-testid="stFileUploaderFileDetails"] {color:#d0d0d0!important;}
-
-/* 💬 Input box */
-.stTextArea textarea {
-  background:var(--surface);
-  color:var(--text);
-  border:1px solid var(--border);
-  border-radius:8px;
-  height:80px;
-  caret-color: var(--text);
-  transition: all 0.2s ease;
-}
-.stTextArea textarea:hover {
-  border-color:#8B0000;
-  box-shadow:0 0 8px #8B000033;
-}
-
-/* 🚀 Buttons */
-.stButton>button {
-  background:var(--accent);
-  color:#fff;
-  border:0;
-  border-radius:8px;
-  height:38px;
-  font-weight:600;
-  transition:all 0.15s ease;
-}
-.stButton>button:hover { filter:brightness(1.12); transform:translateY(-1px); }
-
-/* 🧱 Chat interface */
-.chat-wrap {
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:16px 18px;
-  height:64vh;
-  overflow-y:auto;
-}
-.chat-wrap:empty {display:none!important;}
-.chat-bubble {
-  background:rgba(32,37,44,.95);
-  border:1px solid var(--border);
-  border-left:4px solid var(--accent);
-  border-radius:10px;
-  padding:12px 14px;
-  margin:10px 0;
-  line-height:1.55;
-  color:var(--text)!important;
-  animation:fadeIn .3s ease;
-}
-.meta {color:var(--muted); font-size:11px; margin-top:4px;}
-@keyframes fadeIn {from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
-
-/* 📜 Footer */
-.static-footer {
-  position:fixed; left:0; right:0; bottom:0;
-  background:var(--surface);
-  border-top:2px solid var(--accent);
-  box-shadow:0 -3px 12px rgba(0,0,0,.4);
-  z-index:9999;
-}
-.footer-inner {
-  max-width:1100px; margin:0 auto; padding:10px 16px;
-  display:flex; gap:10px; align-items:flex-end;
-}
-.footer-left{flex:1;}
-.footer-right{width:300px; display:flex; flex-direction:column; gap:8px;}
-
-/* 🪶 Header (typing animation without blinking) */
+/* Header */
 .header-container {
   text-align:center;
   margin-top:10px;
-  margin-bottom:12px;
+  margin-bottom:8px;
   font-family:'Courier New', monospace;
 }
 .typewriter-title {
-  display:inline-block;
-  overflow:hidden;
-  white-space:nowrap;
-  color:var(--accent);
-  font-weight:700;
-  font-size:46px;
-  letter-spacing:.08em;
-  animation:typingTitle 2.6s steps(30,end);
+  display:inline-block; overflow:hidden; white-space:nowrap;
+  color:var(--accent); font-weight:700; font-size:46px; letter-spacing:.08em;
+  animation:typingTitle 2.4s steps(30,end) forwards;
 }
 .typewriter-tagline {
-  display:block;
-  overflow:hidden;
-  white-space:nowrap;
-  color:var(--muted);
-  font-size:14px;
-  letter-spacing:.06em;
-  margin-top:6px;
-  animation:typingTag 3.4s steps(40,end) 2.8s;
+  opacity:0; display:block; white-space:nowrap;
+  color:var(--muted); font-size:14px; letter-spacing:.06em;
+  margin-top:6px; animation:fadeInTag 1.6s ease forwards;
+  animation-delay:2.5s;
 }
-@keyframes typingTitle {from{width:0}to{width:100%}}
-@keyframes typingTag {from{width:0}to{width:100%}}
+@keyframes typingTitle {from{width:0} to{width:100%}}
+@keyframes fadeInTag {from{opacity:0} to{opacity:1}}
+
+/* Textarea hover */
+.stTextArea textarea {
+  background:var(--surface); color:var(--text);
+  border:1px solid var(--border); border-radius:8px; height:80px;
+  caret-color:var(--text); transition:all .2s ease;
+}
+.stTextArea textarea:hover {
+  border-color:#8B0000; box-shadow:0 0 8px #8B000033;
+}
+
+/* Buttons */
+.stButton>button {
+  background:var(--accent); color:#fff; border:0; border-radius:8px;
+  height:38px; font-weight:600; transition:all 0.15s ease;
+}
+.stButton>button:hover {filter:brightness(1.12); transform:translateY(-1px);}
+
+/* Chat area */
+.chat-wrap {background:var(--card); border:1px solid var(--border);
+  border-radius:12px; padding:16px 18px; height:64vh; overflow-y:auto;}
+.chat-wrap:empty{display:none!important;}
+.chat-bubble{background:rgba(32,37,44,.95); border:1px solid var(--border);
+  border-left:4px solid var(--accent); border-radius:10px; padding:12px 14px;
+  margin:10px 0; line-height:1.55; color:var(--text)!important; animation:fadeIn .3s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+/* Static footer */
+.static-footer {
+  position:fixed; bottom:0; left:0; right:0;
+  background:var(--surface); border-top:2px solid var(--accent);
+  box-shadow:0 -3px 12px rgba(0,0,0,.4); z-index:9999;
+}
+.footer-inner {
+  max-width:1100px; margin:0 auto; padding:10px 16px;
+  display:flex; flex-direction:row; align-items:flex-end; gap:10px;
+}
+
+/* Progress bar */
+.progress-bar {
+  position:absolute; top:0; left:0; height:3px;
+  background:var(--accent); width:0; animation:scan 2s linear infinite;
+}
+@keyframes scan {
+  0%{left:-50%; width:50%;}
+  50%{left:25%; width:50%;}
+  100%{left:100%; width:0;}
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -194,7 +125,7 @@ st.markdown("""
 <hr/>
 """, unsafe_allow_html=True)
 
-# ---------- Session state ----------
+# ---------- Session State ----------
 defaults = {"threads":{}, "context":"", "last_agent":"strata", "is_running":False, "prompt":"", "next_agent":"dealhawk"}
 for k,v in defaults.items(): st.session_state.setdefault(k,v)
 
@@ -205,40 +136,29 @@ AGENTS = {
   "proforma":"Critical review and risk calibration (PFNG).",
   "cipher":"IC assembly and governance validation."
 }
-AGENT_SEQUENCE = ["strata","dealhawk","neo","proforma","cipher"]
+AGENT_SEQUENCE = list(AGENTS.keys())
 for a in AGENTS: st.session_state["threads"].setdefault(a,[])
 
 def _recompute_next():
-    current = st.session_state.get("last_agent", "strata")
-    try:
-        idx = AGENT_SEQUENCE.index(current)
-        st.session_state["next_agent"] = AGENT_SEQUENCE[idx + 1] if idx + 1 < len(AGENT_SEQUENCE) else None
-    except ValueError:
-        st.session_state["next_agent"] = None
+  curr = st.session_state["last_agent"]
+  try: i = AGENT_SEQUENCE.index(curr)
+  except: i=0
+  st.session_state["next_agent"] = AGENT_SEQUENCE[i+1] if i+1 < len(AGENT_SEQUENCE) else None
 
 # ---------- Sidebar ----------
 st.sidebar.markdown("### ⚙️ Orchestrator")
 agent = st.sidebar.selectbox("Choose agent", AGENT_SEQUENCE, index=AGENT_SEQUENCE.index(st.session_state["last_agent"]))
-st.session_state["last_agent"] = agent
+st.session_state["last_agent"]=agent
 _recompute_next()
 st.sidebar.caption(AGENTS[agent])
-st.sidebar.markdown("---")
 files = st.sidebar.file_uploader("📎 Upload files (PDF/DOCX)", type=["pdf","docx"], accept_multiple_files=True)
 
-# ---------- File parsers ----------
 def _pdf_text(b):
-    t=""
-    if pdfplumber:
-        try:
-            with pdfplumber.open(io.BytesIO(b)) as pdf:
-                for p in pdf.pages: t+=(p.extract_text() or "")+"\n"
-        except: pass
-    if not t.strip() and OCR_AVAILABLE:
-        try:
-            imgs=convert_from_bytes(b,dpi=200)
-            t="\n".join(pytesseract.image_to_string(i) for i in imgs)
-        except: pass
-    return t.strip()
+    if not pdfplumber: return ""
+    try:
+        with pdfplumber.open(io.BytesIO(b)) as pdf:
+            return "\n".join(p.extract_text() or "" for p in pdf.pages)
+    except: return ""
 
 def _docx_text(b):
     if not Document: return ""
@@ -247,12 +167,12 @@ def _docx_text(b):
     except: return ""
 
 if files:
-    texts=[]
-    for f in files[:3]:
+    t=[]
+    for f in files:
         data=f.getvalue()
-        parsed=_pdf_text(data) if f.name.lower().endswith(".pdf") else _docx_text(data)
-        if parsed:texts.append(parsed)
-    st.session_state["context"]=("\n\n".join(texts))[:10000]
+        txt=_pdf_text(data) if f.name.endswith(".pdf") else _docx_text(data)
+        if txt:t.append(txt)
+    st.session_state["context"]=("\n\n".join(t))[:10000]
 
 if st.sidebar.button("🔁 Reset Session", use_container_width=True):
     st.session_state.clear(); st.rerun()
@@ -260,99 +180,95 @@ if st.sidebar.button("🔁 Reset Session", use_container_width=True):
 # ---------- Helper ----------
 def _compose(user_q:str)->str:
     ctx=st.session_state.get("context","").strip()
-    prior=st.session_state["threads"][agent][-10:]
-    mem="\n".join(f"ASSISTANT: {m['response']}" for m in prior[-5:])
+    prior=st.session_state["threads"][agent][-5:]
+    mem="\n".join(f"{m['agent'].upper()}: {m['response'][:400]}" for m in prior)
     base=user_q
-    if ctx: base=f"Context:\n{ctx}\n\nUser Query:\n{base}"
-    if mem: base=f"Conversation:\n{mem}\n\n{base}"
+    if ctx: base=f"Context:\n{ctx}\n\n{base}"
+    if mem: base=f"Recent Discussion:\n{mem}\n\n{base}"
     return base
 
-# ---------- Agent Runner ----------
-def run_agent(agent_key: str, user_q: str):
-    """Safely run orchestrator subprocess"""
+# ---------- Agent Call ----------
+def run_agent(agent_key, query):
     if st.session_state.get("is_running"): return
-    if not agent_key or not user_q.strip():
-        print("[Sentinel] ⚠️ Skipping subprocess call — missing agent or query.")
-        return
-
-    st.session_state["is_running"] = True
-    q = _compose(user_q)
-    output = ""; is_error = False
-
-    st.toast(f"Routing to agent: {agent_key.upper()}...", icon="🛰️")
-    print(f"[Sentinel] 🛰️ Running agent {agent_key} with query length {len(q)}")
+    st.session_state["is_running"]=True
+    composed=_compose(query)
+    output=""; is_error=False
+    st.toast(f"🛰 Accessing {agent_key.upper()}...", icon="🔴")
 
     try:
-        res = subprocess.run(["python","sentinal_orchestrator.py", agent_key, q],
-                             capture_output=True, text=True, check=False, timeout=90)
-        output = (res.stdout or "").strip() or (res.stderr or "").strip()
+        res=subprocess.run(["python","sentinal_orchestrator.py",agent_key,composed],
+                           capture_output=True,text=True,timeout=90)
+        output=(res.stdout or res.stderr or "").strip()
     except Exception as e:
-        output = f"⚠️ Execution error: {e}"; is_error = True
+        output=f"⚠️ Error: {e}"; is_error=True
 
-    if "threads" not in st.session_state: st.session_state["threads"] = {}
-    if agent_key not in st.session_state["threads"]: st.session_state["threads"][agent_key] = []
     st.session_state["threads"][agent_key].append({
-        "agent": agent_key, "query": user_q, "response": output,
-        "time": datetime.now().strftime("%H:%M:%S"), "error": is_error
-    })
-    st.session_state["is_running"] = False
+        "agent":agent_key,"query":query,"response":output,
+        "time":datetime.now().strftime("%H:%M:%S"),"error":is_error})
+    st.session_state["is_running"]=False
     st.rerun()
 
-# ---------- Chat ----------
-thread = st.session_state["threads"][agent]
+# ---------- Chat Area ----------
+thread=st.session_state["threads"][agent]
 if thread:
-    st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
-    for item in thread[-15:]:
-        css_extra = " error" if item.get("error") else ""
-        cleaned = item["response"]
-        st.markdown(
-            f"""<div class="chat-bubble{css_extra}">
-                <b>{item['agent'].upper()}</b><br>{cleaned.replace(chr(10), '<br>')}
-                <div class="meta">⏱ {item['time']}</div></div>""", unsafe_allow_html=True
-        )
-    st.markdown('</div>', unsafe_allow_html=True)
-st.markdown("<div style='height:36px;'></div>", unsafe_allow_html=True)
+    st.markdown('<div class="chat-wrap">',unsafe_allow_html=True)
+    for m in thread[-12:]:
+        st.markdown(f"""
+        <div class="chat-bubble">
+        <b>{m['agent'].upper()}</b><br>{m['response'].replace(chr(10),'<br>')}
+        <div class="meta">⏱ {m['time']}</div>
+        </div>""",unsafe_allow_html=True)
+    st.markdown('</div>',unsafe_allow_html=True)
+st.markdown("<div style='height:36px'></div>",unsafe_allow_html=True)
 
-# ---------- Footer ----------
-st.markdown("""
-<div class='static-footer'><div class='footer-inner'>
-  <div class='footer-left'></div><div class='footer-right'></div>
-</div></div>
-""", unsafe_allow_html=True)
-left,right=st.empty(),st.empty()
-with left.container():
-    st.session_state["prompt"]=st.text_area("Type your prompt here:",
-        value=st.session_state["prompt"], key="prompt_box",
-        placeholder=f"Ask {agent.capitalize()}…", height=80)
-with right.container():
+# ---------- Static Footer ----------
+st.markdown("<div class='static-footer'><div class='progress-bar' id='prog'></div><div class='footer-inner'>",unsafe_allow_html=True)
+col1,col2,col3=st.columns([5,2,2])
+with col1:
+    st.session_state["prompt"]=st.text_area("Type your prompt:", value=st.session_state["prompt"], key="prompt_box", placeholder=f"Ask {agent.capitalize()}…", height=80)
+with col2:
     ask_btn=st.button("💬 Ask Agent", use_container_width=True)
-    nxt=st.session_state.get("next_agent")
-    send_next_btn=st.button(f"➡ Send to {nxt.upper()}" if nxt else "No Next Agent",
-                            use_container_width=True, disabled=(nxt is None))
+with col3:
+    nxt=st.session_state["next_agent"]
+    send_btn=st.button(f"➡ Send to {nxt.upper()}" if nxt else "No Next", use_container_width=True, disabled=(nxt is None))
+st.markdown("</div></div>",unsafe_allow_html=True)
+
+if st.session_state["is_running"]:
+    st.markdown("<script>document.getElementById('prog').style.width='100%';</script>",unsafe_allow_html=True)
+else:
+    st.markdown("<script>document.getElementById('prog').style.width='0';</script>",unsafe_allow_html=True)
 
 user_q=(st.session_state["prompt"] or "").strip()
-if ask_btn:
-    if user_q:
-        run_agent(agent, user_q); st.session_state["prompt"]=""
-    else:
-        st.warning("Type a question first.")
-elif send_next_btn and nxt:
+if ask_btn and user_q: run_agent(agent,user_q)
+elif send_btn and nxt:
     if st.session_state["threads"][agent]:
-        last_resp = st.session_state["threads"][agent][-1]["response"]
-        summary = last_resp
-        time.sleep(0.4)
-        run_agent(nxt, summary)
-    else:
-        st.warning("No output to pass forward from the current agent.")
+        last=st.session_state["threads"][agent][-1]["response"]
+        run_agent(nxt,last)
+    else: st.warning("No prior output to send.")
 
 # ---------- Overview ----------
 with st.expander("🧠 Sentinel Agent Overview — Roles & Prompting Guide", expanded=False):
     st.markdown("""
-**SENTINEL** coordinates autonomous agents for private-market intelligence and decision analysis in energy transition & industrials.
+**SENTINEL** coordinates autonomous agents for private-market intelligence and decision analysis across energy transition & industrials.  
+Each agent can be refined with iterative questioning before hand-off.
 
-- **STRATA** — market mapping  
-- **DEALHAWK** — deal sourcing  
-- **NEO** — financial modeling  
-- **PRO FORMA NON GRATA (PFNG)** — risk calibration  
-- **CIPHER** — governance and IC synthesis  
+### 🛰 **STRATA** — Market Mapping  
+- *Purpose:* Identify key sub-themes, technologies, and companies.  
+- *Try:* “Map emerging U.S. midstream decarbonization subsectors.”  
+
+### 🦅 **DEALHAWK** — Deal Sourcing  
+- *Purpose:* Source and profile private, profitable companies.  
+- *Try:* “Find five late-stage private grid-modernization firms in Texas.”  
+
+### 🧮 **NEO** — Financial Modeling  
+- *Purpose:* Turn insights into model assumptions and pro formas.  
+- *Try:* “Translate Strata’s findings into a base case P&L for 2025–2030.”  
+
+### ⚖️ **PRO FORMA NON GRATA (PFNG)** — Critical Review  
+- *Purpose:* Stress-test assumptions, assign risk scores.  
+- *Try:* “Challenge the model: what are three counterfactual risk cases?”  
+
+### 🔐 **CIPHER** — IC Compilation  
+- *Purpose:* Build IC memo and governance alignment.  
+- *Try:* “Assemble a structured IC summary based on Neo’s and PFNG’s outputs.”  
 """)
