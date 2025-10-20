@@ -1,5 +1,5 @@
-# ---------- Sentinel v3.3.2 — Espionage Console ----------
-# Dark fade intro • Centered agent select • Safe rerun • Fixed threads init • Streamlined visuals
+# ---------- Sentinel v3.3.3 — Dark Espionage Console ----------
+# Persistent dark theme • Fade intro • Red-glow buttons • Safe rerun • Compact agent UI
 
 import io, os, sys, json, time, subprocess, streamlit as st
 from datetime import datetime
@@ -7,21 +7,56 @@ from datetime import datetime
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="Sentinel", layout="wide")
 
-# ---------- ADD SCROLL-FADE CSS ----------
+# ---------- GLOBAL DARK THEME OVERRIDE ----------
 st.markdown("""
 <style>
-.chat-fade {
-  position:relative;
+html, body, [class*="stAppViewContainer"], [class*="stMain"], [class*="stApp"], [data-testid="stAppViewContainer"] {
+    background-color: #0B0C0F !important;
+    color: #F8F8F8 !important;
+    font-family: 'Courier New', monospace !important;
 }
+hr {
+    border-top: 1px solid #2C313A !important;
+}
+[data-testid="stSidebar"] {
+    background-color: #0B0C0F !important;
+}
+button[kind="primary"], .stButton>button {
+    background-color: #E63946 !important;
+    color: white !important;
+    border-radius: 8px;
+    border: none;
+    box-shadow: 0 0 12px rgba(230, 57, 70, 0.3);
+    transition: 0.2s ease-in-out;
+}
+button[kind="primary"]:hover, .stButton>button:hover {
+    background-color: #FF465A !important;
+    box-shadow: 0 0 16px rgba(255, 70, 90, 0.5);
+}
+input, textarea, select, [data-baseweb="input"], [data-baseweb="textarea"] {
+    background-color: #1E232B !important;
+    color: #F8F8F8 !important;
+    border-radius: 6px !important;
+    border: 1px solid #2C313A !important;
+}
+.stSelectbox div[role="combobox"] {
+    background-color: #1E232B !important;
+    color: #E63946 !important;
+}
+.stMarkdown, .stText, label, p, span {
+    color: #D9D9D9 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------- SCROLL FADE ----------
+st.markdown("""
+<style>
+.chat-fade { position:relative; }
 .chat-fade::after {
-  content:"";
-  position:absolute;
-  bottom:0;
-  left:0;
-  width:100%;
-  height:20px;
+  content:""; position:absolute; bottom:0; left:0; width:100%; height:20px;
   pointer-events:none;
-  background:linear-gradient(to top, #0d0f12 0%, transparent 100%);
+  background:linear-gradient(to top, #0B0C0F 0%, transparent 100%);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -42,8 +77,6 @@ for k, v in defaults.items():
         st.session_state[k] = v
 if st.session_state.get("is_running", False):
     st.session_state["is_running"] = False
-
-# ✅ Initialize empty threads for all agents
 for a in ["strata", "dealhawk", "neo", "proforma", "cipher"]:
     if a not in st.session_state["threads"]:
         st.session_state["threads"][a] = []
