@@ -1,6 +1,8 @@
 # ---------- SENTINEL v4.1 (DEMO-STABLE BUILD) ----------
-import streamlit as st, subprocess, json, sys, time
-from datetime import datetime
+import streamlit as st
+# --- backward-compatibility shim ---
+if not hasattr(st, "experimental_rerun"):
+    st.experimental_rerun = st.rerun
 
 st.set_page_config(page_title="SENTINEL", layout="wide")
 
@@ -145,3 +147,4 @@ with c3:
             out = call_orchestrator(nxt,data)
         store(nxt,out)
         st.success(f"✅ {nxt.upper()} RESPONSE RECEIVED"); st.experimental_rerun()
+
