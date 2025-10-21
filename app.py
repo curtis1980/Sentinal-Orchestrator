@@ -1,150 +1,127 @@
-# ---------- SENTINEL v4.1 (DEMO-STABLE BUILD) ----------
-import streamlit as st
-# --- backward-compatibility shim ---
-if not hasattr(st, "experimental_rerun"):
-    st.experimental_rerun = st.rerun
+# SENTINEL Console v4.2 (Demo-Stable)
+import streamlit as st, sys, subprocess, json, time
+from datetime import datetime
 
 st.set_page_config(page_title="SENTINEL", layout="wide")
 
-# ---------- GLOBAL STYLE ----------
+# --- Back-compat shim: Streamlit removed experimental_rerun in newer versions ---
+if not hasattr(st, "experimental_rerun"):
+    st.experimental_rerun = st.rerun  # maps to stable API
+
+# --- Style (kept minimal) ---
 st.markdown("""
 <style>
-html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stToolbar"],
-[data-testid="stSidebar"], .stApp, .main, .block-container {
-  background-color:#0D0F12 !important; color:#F8F8F8 !important;
-  font-family:'Courier New', monospace !important;
-}
-.stButton>button {background:#E63946 !important; color:#fff !important;
-  border:none !important; border-radius:6px !important; font-weight:600 !important;
-  box-shadow:0 0 8px rgba(230,57,70,.28);}
-.stButton>button:hover{background:#FF465A !important;}
-.chat-pane{background:#1E232B; border:1px solid #1C232C; border-radius:8px;
-  padding:16px 18px; height:50vh; overflow-y:auto;}
+html, body, [data-testid="stAppViewContainer"] { background:#0D0F12; color:#F8F8F8; }
+.stButton>button { background:#E63946; color:#fff; border:none; border-radius:6px; }
+.chat{background:#1E232B;border:1px solid #1C232C;border-radius:8px;padding:12px;max-height:48vh;overflow:auto;}
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- SESSION STATE ----------
+# --- State ---
 state = st.session_state
-if "app_mode" not in state: state.app_mode = "intro"
-if "threads" not in state: state.threads = {}
-if "prompt" not in state: state.prompt = ""
+state.setdefault("phase", "console")   # intro removed for stability
+state.setdefault("threads", {})
 
-# ---------- CINEMATIC INTRO ----------
-if state.app_mode == "intro":
-    placeholder = st.empty()
-    placeholder.markdown("""
-    <div style="height:90vh;display:flex;flex-direction:column;justify-content:center;align-items:center;
-                text-align:center;font-family:'Courier New',monospace;">
-      <div style="color:#E63946;font-size:42px;letter-spacing:.10em;font-weight:800;
-                  border-right:3px solid #E63946;white-space:nowrap;overflow:hidden;
-                  animation:typing 2.6s steps(9,end), blink .8s step-end 3;">
-        SENTINEL
-      </div>
-      <div style="color:#A8B2BD;margin-top:10px;">AUTHENTICATING SESSION…</div>
-      <div style="color:#9AA6B1;margin-top:8px;font-size:13px;text-align:left;line-height:1.6;">
-        🛰 INITIALIZING NODES…<br>
-        <span style="color:#48FF7F;">✅ STRATA NODE ONLINE</span><br>
-        <span style="color:#48FF7F;">✅ DEALHAWK NODE ONLINE</span><br>
-        <span style="color:#48FF7F;">✅ NEO NODE ONLINE</span><br>
-        <span style="color:#48FF7F;">✅ PFNG NODE ONLINE</span><br>
-        <span style="color:#48FF7F;">✅ CIPHER SECURE CHANNEL</span>
-      </div>
-    </div>
-    <style>
-    @keyframes typing {from {width:0ch;} to {width:10ch;}}
-    @keyframes blink {0%,50%{border-color:#E63946;}51%,100%{border-color:transparent;}}
-    </style>
-    """, unsafe_allow_html=True)
-    time.sleep(4.5)
-    placeholder.empty()
-    state.app_mode = "console"
-    st.experimental_rerun()
-
-# ---------- MAIN CONSOLE ----------
+# --- Header ---
 st.markdown("""
-<div style="text-align:center;margin-top:8px;">
-  <div style="color:#E63946;font-size:42px;font-weight:800;">SENTINEL</div>
-  <div style="color:#A8B2BD;font-size:15px;">Autonomous Agents for Asymmetric Advantage</div>
+<div style="text-align:center;margin-top:6px;">
+  <div style="color:#E63946;font-size:38px;font-weight:800;">SENTINEL</div>
+  <div style="color:#A8B2BD;">Autonomous Agents for Asymmetric Advantage</div>
 </div>
-<hr style="margin:14px 0 20px;">
+<hr>
 """, unsafe_allow_html=True)
 
+# --- Agents & Chain ---
 AGENTS = {
-    "strata": "Research & intelligence for energy/decarbonization.",
-    "dealhawk": "Deal sourcing for private companies.",
-    "neo": "Financial modeling & scenario analysis.",
-    "proforma": "Risk calibration & diligence (PFNG).",
-    "cipher": "IC assembly & governance validation."
+    "strata": "Research & intelligence",
+    "dealhawk": "Deal sourcing",
+    "neo": "Financial modeling",
+    "proforma": "Stress test / diligence",
+    "cipher": "Governance / IC"
 }
 CHAIN = {"strata":"dealhawk","dealhawk":"neo","neo":"proforma","proforma":"cipher","cipher":None}
 
+# --- Selector ---
 c1,c2,c3 = st.columns([1,2,1])
 with c2:
     agent = st.selectbox("Choose agent", list(AGENTS.keys()), index=0, key="agent_select")
 st.caption(f"⚙ {AGENTS[agent]}")
 
-# ---------- CHAT PANEL ----------
+# --- Chat panel ---
 thread = state.threads.get(agent, [])
 if thread:
-    st.markdown('<div class="chat-pane">', unsafe_allow_html=True)
-    for msg in thread[-10:]:
-        st.markdown(f"""
-        <div style='border-left:3px solid #E63946;padding:8px 10px;margin:6px 0;color:#F8F8F8;'>
-            <b>{msg['agent'].upper()}</b><br>{msg['response']}
-            <div style='color:#9AA6B1;font-size:11px;margin-top:3px;'>⏱ {msg['time']}</div>
-        </div>""", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('<div class="chat">', unsafe_allow_html=True)
+    for m in thread[-12:]:
+        st.markdown(
+            f"<div style='border-left:3px solid #E63946;padding:6px 8px;margin:6px 0;'>"
+            f"<b>{m['agent'].upper()}</b><br>{m['response']}"
+            f"<div style='color:#9AA6B1;font-size:11px;'>⏱ {m['time']}</div>"
+            f"</div>", unsafe_allow_html=True
+        )
+    st.markdown('</div>', unsafe_allow_html=True)
 else:
     st.info("No messages yet.")
 
-# ---------- PROMPT ----------
-st.markdown(f"<div style='color:#A8B2BD;'>Type your prompt for {agent.upper()}:</div>", unsafe_allow_html=True)
-user_prompt = st.text_area("", placeholder=f"Ask {agent.capitalize()}…", height=90, label_visibility="collapsed", key="prompt_box")
+# --- Prompt ---
+prompt = st.text_area("Prompt", placeholder=f"Ask {agent.capitalize()}…", height=90, key="prompt_box")
 
-# ---------- BACKEND SAFE CALL ----------
-def call_orchestrator(agent_key, query):
+# --- Orchestrator call ---
+def call_orchestrator(agent_key: str, query: str) -> str:
     try:
         result = subprocess.run(
             [sys.executable, "sentinal_orchestrator.py", agent_key, query],
-            capture_output=True, text=True, timeout=30)
+            capture_output=True, text=True, timeout=30
+        )
+        # show stderr to help debugging but keep UX safe
+        if result.returncode != 0:
+            return f"❌ {result.stderr or result.stdout}"
         data = json.loads(result.stdout)
-        if "error" in data:
-            return f"⚠️ {data['error']}"
-        return data.get("output", str(data))
-    except FileNotFoundError:
-        return f"[DEMO RESPONSE] Simulated output from {agent_key.upper()}."
+        # Single agent returns a dict; fullchain returns {final, chain}
+        if "final" in data:
+            return data["final"]["summary"]
+        if "summary" in data:
+            return data["summary"]
+        return str(data)
     except subprocess.TimeoutExpired:
         return f"⏱️ {agent_key.upper()} timed out."
     except Exception as e:
         return f"💥 {type(e).__name__}: {e}"
 
-def store(agent_key, text):
-    msg = {"agent": agent_key, "response": text, "time": datetime.now().strftime("%H:%M:%S")}
-    state.threads.setdefault(agent_key, []).append(msg)
+def store(agent_key: str, text: str):
+    state.threads.setdefault(agent_key, []).append({
+        "agent": agent_key,
+        "response": text,
+        "time": datetime.now().strftime("%H:%M:%S")
+    })
 
-# ---------- CONTROLS ----------
-c1,c2,c3 = st.columns([4,2,2])
-with c1:
+# --- Controls ---
+b1,b2,b3 = st.columns([4,2,2])
+with b1:
     if st.button("🔁 Reset Session", use_container_width=True):
-        for k in ["threads","prompt_box"]: state.pop(k, None)
-        st.experimental_rerun()
-with c2:
+        state.threads = {}
+        state.prompt_box = ""
+with b2:
     if st.button("💬 Ask Agent", use_container_width=True):
-        q = state.get("prompt_box","").strip()
-        if not q: st.warning("Enter a prompt."); st.stop()
-        with st.spinner(f"⚙️ ACCESSING {agent.upper()} NODE..."):
-            out = call_orchestrator(agent,q)
-        store(agent,out)
-        st.success("✅ RESPONSE RECEIVED"); st.experimental_rerun()
-with c3:
+        q = (state.get("prompt_box") or "").strip()
+        if not q:
+            st.warning("Enter a prompt.")
+        else:
+            with st.spinner(f"⚙️ ACCESSING {agent.upper()} NODE..."):
+                out = call_orchestrator(agent, q)
+            store(agent, out)
+            st.success("✅ RESPONSE RECEIVED")
+with b3:
     if st.button("➡ Send to Next", use_container_width=True):
         nxt = CHAIN.get(agent)
-        if not nxt: st.info("No next agent in chain."); st.stop()
-        prev = state.threads.get(agent, [])
-        if not prev: st.warning("No output to forward."); st.stop()
-        data = prev[-1]["response"][:2000]
-        with st.spinner(f"➡ Forwarding to {nxt.upper()}..."):
-            out = call_orchestrator(nxt,data)
-        store(nxt,out)
-        st.success(f"✅ {nxt.upper()} RESPONSE RECEIVED"); st.experimental_rerun()
-
+        if not nxt:
+            st.info("No next agent in chain.")
+        else:
+            last = state.threads.get(agent, [])
+            if not last:
+                st.warning("No prior output to forward.")
+            else:
+                payload = last[-1]["response"][:2000]
+                with st.spinner(f"➡ Forwarding to {nxt.upper()}..."):
+                    out = call_orchestrator(nxt, payload)
+                store(nxt, out)
+                st.success(f"✅ {nxt.upper()} RESPONSE RECEIVED")
