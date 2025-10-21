@@ -57,10 +57,10 @@ textarea, input, [data-baseweb="textarea"], [data-baseweb="input"]{
   padding:16px 18px; height:50vh; overflow-y:auto;
 }
 
-/* --- Header animation (true typewriter) --- */
+/* --- Header animation (true typewriter, fixed cutoff) --- */
 @keyframes typing {
   from { width: 0ch; }
-  to { width: 9ch; }  /* "SENTINEL" is 9 characters */
+  to { width: 10ch; }  /* allow full render of "SENTINEL" */
 }
 @keyframes blink {
   0%, 50% { border-color: #E63946; }
@@ -75,9 +75,10 @@ textarea, input, [data-baseweb="textarea"], [data-baseweb="input"]{
   font-size:42px;
   letter-spacing:.10em;
   border-right:3px solid #E63946;
-  animation: typing 2.4s steps(9, end), blink 0.8s step-end 3;
-  animation-fill-mode: forwards;
+  animation: typing 2.4s steps(9,end) forwards, blink 0.8s step-end 3;
+  animation-fill-mode:forwards;
 }
+
 .header-sub {
   font-family:'Courier New', monospace;
   color:#A8B2BD;
@@ -108,10 +109,10 @@ if not st.session_state["entry_done"]:
     st.markdown("""
     <style>
     @keyframes fadeOut {0%{opacity:1;}95%{opacity:0;}100%{opacity:0;display:none}}
-    @keyframes typingIntro {
-      from { width: 0ch; }
-      to { width: 9ch; }
-    }
+   @keyframes typingIntro {
+  from { width: 0ch; }
+  to { width: 10ch; } /* one extra character space */
+}
     @keyframes blinkIntro {
       0%,50% { border-color:#E63946; }
       51%,100% { border-color:transparent; }
@@ -201,3 +202,4 @@ with col2:
     st.button("💬 Ask Agent", use_container_width=True)
 with col3:
     st.button("➡ Send to Next", use_container_width=True)
+
