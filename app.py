@@ -1,7 +1,8 @@
-# ---------- SENTINEL v3.5.2 — UI Polish ----------
+# ---------- SENTINEL v3.5.3 — Typewriter & Caret Fix ----------
 # Fixes:
-# - Dropdown gray tone harmonized with header background
-# - Removes infinite blinking caret after SENTINEL typing completes
+# - True typewriter letter animation (no sliding text)
+# - Caret disappears after typing completes
+# - UI colors match cinematic terminal aesthetic
 
 import streamlit as st
 import time
@@ -56,36 +57,37 @@ textarea, input, [data-baseweb="textarea"], [data-baseweb="input"]{
   padding:16px 18px; height:50vh; overflow-y:auto;
 }
 
-/* Header animations */
-@keyframes typingHeader {
-  from{width:0;}
-  to{width:100%;}
+/* --- Header animation (true typewriter) --- */
+@keyframes typing {
+  from { width: 0ch; }
+  to { width: 9ch; }  /* "SENTINEL" is 9 characters */
 }
-@keyframes fadeInSub {
-  from{opacity:0;}
-  to{opacity:1;}
+@keyframes blink {
+  0%, 50% { border-color: #E63946; }
+  51%, 100% { border-color: transparent; }
 }
-.header-type{
-  font-family:'Courier New', monospace;
+.header-type {
+  display:inline-block;
+  overflow:hidden;
+  white-space:nowrap;
   color:#E63946;
   font-weight:800;
   font-size:42px;
   letter-spacing:.10em;
-  border-right:2px solid #E63946;
-  white-space:nowrap;
-  overflow:hidden;
-  width:0;
-  animation:typingHeader 2.4s steps(22,end) .2s forwards;
+  border-right:3px solid #E63946;
+  animation: typing 2.4s steps(9, end), blink 0.8s step-end 3;
+  animation-fill-mode: forwards;
 }
-.header-sub{
+.header-sub {
   font-family:'Courier New', monospace;
   color:#A8B2BD;
   font-size:15px;
   letter-spacing:.06em;
   margin-top:8px;
   opacity:0;
-  animation:fadeInSub 1.2s ease 2.4s forwards;
+  animation: fadeInSub 1.2s ease 2.4s forwards;
 }
+@keyframes fadeInSub { from {opacity:0;} to {opacity:1;} }
 
 /* Prompt labels */
 .prompt-label{ color:#A8B2BD !important; font-size:13px !important; letter-spacing:.05em !important; }
@@ -101,21 +103,29 @@ if "threads" not in st.session_state:
 if "prompt" not in st.session_state:
     st.session_state["prompt"] = ""
 
-# ---------- INTRO (fade + typewriter, caret stops) ----------
+# ---------- INTRO (fade + typing, caret stops) ----------
 if not st.session_state["entry_done"]:
     st.markdown("""
     <style>
     @keyframes fadeOut {0%{opacity:1;}95%{opacity:0;}100%{opacity:0;display:none}}
-    @keyframes typing {from{width:0;}to{width:100%}}
+    @keyframes typingIntro {
+      from { width: 0ch; }
+      to { width: 9ch; }
+    }
+    @keyframes blinkIntro {
+      0%,50% { border-color:#E63946; }
+      51%,100% { border-color:transparent; }
+    }
     </style>
 
     <div style="height:90vh;display:flex;flex-direction:column;justify-content:center;
          align-items:center;text-align:center;font-family:'Courier New',monospace;
          animation:fadeOut 1.5s ease-out 3.4s forwards;">
       <div style="color:#E63946;font-size:42px;letter-spacing:.10em;font-weight:800;
-                  margin-bottom:12px;border-right:2px solid #E63946;width:0;overflow:hidden;
-                  white-space:nowrap;
-                  animation:typing 2.6s steps(24,end) .3s forwards;">
+                  margin-bottom:12px;display:inline-block;overflow:hidden;white-space:nowrap;
+                  border-right:3px solid #E63946;
+                  animation:typingIntro 2.6s steps(9,end), blinkIntro 0.8s step-end 3;
+                  animation-fill-mode:forwards;">
         SENTINEL
       </div>
       <div style="color:#A8B2BD;font-size:14px;letter-spacing:.08em;margin:10px 0 22px;">
