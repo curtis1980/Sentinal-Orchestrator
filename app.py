@@ -1,10 +1,7 @@
-# ---------- SENTINEL v3.5.1 — Final Stable Console UI ----------
-# Features:
-# - Verified typewriter boot intro + fade
-# - Terminal/ Courier typography across the app
-# - Global dark theme (no white flash; enforced on all containers)
-# - Centered compact agent select, blue-gray chat pane
-# - Prompt label + helper, aligned button row
+# ---------- SENTINEL v3.5.2 — UI Polish ----------
+# Fixes:
+# - Dropdown gray tone harmonized with header background
+# - Removes infinite blinking caret after SENTINEL typing completes
 
 import streamlit as st
 import time
@@ -13,10 +10,9 @@ from datetime import datetime
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="SENTINEL", layout="wide")
 
-# ---------- GLOBAL THEME (enforced) ----------
+# ---------- GLOBAL THEME ----------
 st.markdown("""
 <style>
-/* Hard-lock dark bg on all core wrappers to avoid white areas or flashes */
 html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], 
 [data-testid="stToolbar"], [data-testid="stSidebar"], .stApp, .main, .block-container {
   background-color:#0D0F12 !important;
@@ -26,12 +22,18 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"],
 [data-testid="stHeader"], [data-testid="stToolbar"] { background:transparent !important; }
 hr { border:0; border-top:1px solid #2C313A; }
 
-/* Normalize markdown text color */
-.stMarkdown, .stText, .stCaption, .st-emotion-cache p, label, span {
-  color:#D9D9D9 !important; font-family:'Courier New', monospace !important;
+/* Dropdown harmonized gray tone */
+div[data-baseweb="select"] > div{
+  background:#16191D !important;
+  border:1px solid #E6394622 !important;
+  border-radius:6px !important;
+}
+div[data-baseweb="select"] div, div[data-baseweb="select"] svg{
+  color:#E63946 !important;
+  font-family:'Courier New', monospace !important;
 }
 
-/* Buttons (red) */
+/* Buttons (red aesthetic) */
 .stButton>button {
   background:#E63946 !important; color:#fff !important; border:none !important;
   border-radius:6px !important; font-weight:600 !important; height:38px !important;
@@ -45,42 +47,47 @@ textarea, input, [data-baseweb="textarea"], [data-baseweb="input"]{
   border:1px solid #2C313A !important; border-radius:6px !important;
 }
 
-/* Selectbox (compact, red border, Courier) */
-div[data-baseweb="select"] > div{
-  background:#1E232B !important; border:1px solid #E63946 !important; border-radius:6px !important;
-}
-div[data-baseweb="select"] div, div[data-baseweb="select"] svg{
-  color:#E63946 !important; font-family:'Courier New', monospace !important;
-}
-
-/* Info/alert restyle (keeps subtle blue strip look) */
+/* Info + chat styling */
 [data-testid="stNotification"], .stAlert {
   background:#111720 !important; border:1px solid #1C232C !important; color:#D9E4F0 !important;
 }
-
-/* Chat container */
 .chat-pane{
   background:#1E232B; border:1px solid #1C232C; border-radius:8px;
   padding:16px 18px; height:50vh; overflow-y:auto;
 }
 
 /* Header animations */
-@keyframes typingHeader{from{width:0}to{width:100%}}
-@keyframes caretHeader{0%,100%{border-color:transparent}50%{border-color:#E63946}}
-@keyframes fadeInSub{from{opacity:0}to{opacity:1}}
-
+@keyframes typingHeader {
+  from{width:0;}
+  to{width:100%;}
+}
+@keyframes fadeInSub {
+  from{opacity:0;}
+  to{opacity:1;}
+}
 .header-type{
-  font-family:'Courier New', monospace; color:#E63946; font-weight:800;
-  font-size:42px; letter-spacing:.10em; border-right:2px solid #E63946;
-  white-space:nowrap; overflow:hidden; width:0;
-  animation:typingHeader 2.4s steps(22,end) .2s forwards, caretHeader 1s step-end infinite;
+  font-family:'Courier New', monospace;
+  color:#E63946;
+  font-weight:800;
+  font-size:42px;
+  letter-spacing:.10em;
+  border-right:2px solid #E63946;
+  white-space:nowrap;
+  overflow:hidden;
+  width:0;
+  animation:typingHeader 2.4s steps(22,end) .2s forwards;
 }
 .header-sub{
-  font-family:'Courier New', monospace; color:#A8B2BD; font-size:15px;
-  letter-spacing:.06em; margin-top:8px; opacity:0; animation:fadeInSub 1.2s ease 2.4s forwards;
+  font-family:'Courier New', monospace;
+  color:#A8B2BD;
+  font-size:15px;
+  letter-spacing:.06em;
+  margin-top:8px;
+  opacity:0;
+  animation:fadeInSub 1.2s ease 2.4s forwards;
 }
 
-/* Prompt label + helper */
+/* Prompt labels */
 .prompt-label{ color:#A8B2BD !important; font-size:13px !important; letter-spacing:.05em !important; }
 .prompt-helper{ color:#73818C !important; font-size:12px !important; letter-spacing:.04em !important; }
 </style>
@@ -94,21 +101,21 @@ if "threads" not in st.session_state:
 if "prompt" not in st.session_state:
     st.session_state["prompt"] = ""
 
-# ---------- BOOT INTRO (typewriter + fade) ----------
+# ---------- INTRO (fade + typewriter, caret stops) ----------
 if not st.session_state["entry_done"]:
     st.markdown("""
     <style>
     @keyframes fadeOut {0%{opacity:1;}95%{opacity:0;}100%{opacity:0;display:none}}
-    @keyframes typing {from{width:0}to{width:100%}}
-    @keyframes caret {0%,100%{border-color:transparent}50%{border-color:#E63946}}
+    @keyframes typing {from{width:0;}to{width:100%}}
     </style>
 
     <div style="height:90vh;display:flex;flex-direction:column;justify-content:center;
          align-items:center;text-align:center;font-family:'Courier New',monospace;
          animation:fadeOut 1.5s ease-out 3.4s forwards;">
-      <div style="color:#E63946;font-size:42px;letter-spacing:.10em;font-weight:800;margin-bottom:12px;
-                  border-right:2px solid #E63946;width:0;overflow:hidden;white-space:nowrap;
-                  animation:typing 2.6s steps(24,end) .3s forwards, caret 1s step-end infinite;">
+      <div style="color:#E63946;font-size:42px;letter-spacing:.10em;font-weight:800;
+                  margin-bottom:12px;border-right:2px solid #E63946;width:0;overflow:hidden;
+                  white-space:nowrap;
+                  animation:typing 2.6s steps(24,end) .3s forwards;">
         SENTINEL
       </div>
       <div style="color:#A8B2BD;font-size:14px;letter-spacing:.08em;margin:10px 0 22px;">
@@ -147,13 +154,12 @@ AGENTS = {
 }
 agent_keys = list(AGENTS.keys())
 
-# center the selector
-s1, s2, s3 = st.columns([1,2,1])
-with s2:
+c1, c2, c3 = st.columns([1,2,1])
+with c2:
     agent = st.selectbox("Choose agent", agent_keys, index=0, key="agent_select")
 st.caption(f"⚙ {AGENTS[agent]}")
 
-# ---------- CHAT WINDOW ----------
+# ---------- CHAT DISPLAY ----------
 thread = st.session_state["threads"].get(agent, [])
 if thread:
     st.markdown('<div class="chat-pane">', unsafe_allow_html=True)
@@ -168,21 +174,20 @@ if thread:
 else:
     st.info("No messages yet.")
 
-# ---------- PROMPT + HELPER ----------
+# ---------- PROMPT ----------
 st.markdown('<div class="prompt-label">Type your prompt:</div>', unsafe_allow_html=True)
 st.markdown(
     f'<div class="prompt-helper">Tip: ask {agent.capitalize()} with context — include scope, region, metrics, and time frame for best precision.</div>',
     unsafe_allow_html=True
 )
-user_prompt = st.text_area("", placeholder=f"Ask {agent.capitalize()}…",
-                           height=90, label_visibility="collapsed", key="prompt_box")
+user_prompt = st.text_area("", placeholder=f"Ask {agent.capitalize()}…", height=90, label_visibility="collapsed", key="prompt_box")
 
-# ---------- BUTTON ROW ----------
-c1, c2, c3 = st.columns([4,2,2])
-with c1:
+# ---------- BUTTONS ----------
+col1, col2, col3 = st.columns([4,2,2])
+with col1:
     if st.button("🔁 Reset Session", use_container_width=True):
         st.session_state.clear(); st.rerun()
-with c2:
+with col2:
     st.button("💬 Ask Agent", use_container_width=True)
-with c3:
+with col3:
     st.button("➡ Send to Next", use_container_width=True)
