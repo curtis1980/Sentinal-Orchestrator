@@ -1,101 +1,58 @@
-# ---------- Sentinel v3.3.5 — Final UI Alignment Build ----------
-# Target: black-matte espionage console layout from reference image
-# Includes: fade intro, centered alignment, consistent colors, 3-button row
+# ---------- SENTINEL v3.4 — Final Unified Console Build ----------
+# Aesthetic: Courier terminal style, red/blue palette, fade intro, unified UI
 
-import time, subprocess, streamlit as st
+import time
+import streamlit as st
 from datetime import datetime
 
+# ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="Sentinel", layout="wide")
-
-# ---------- THEME ----------
 st.markdown("""
 <style>
-:root, html, body, [class*="stAppViewContainer"], [class*="stMain"] {
-    background-color:#0B0C0F !important;
-    color:#E6E6E6 !important;
-    font-family:'Courier New',monospace !important;
-}
-hr {border-top:1px solid #2C313A !important;}
-[data-testid="stSidebar"] {background-color:#0B0C0F !important;}
-.stMarkdown, label, span, p {color:#D9D9D9 !important;}
-
-/* Header */
-h1,h2,h3,h4,h5 {
-    color:#E63946 !important;
-    text-align:center !important;
-    letter-spacing:.08em;
-    font-weight:700 !important;
-}
-
-/* Chat area */
-.chat-box {
-    background:#12161E;
-    border:1px solid #1C232C;
-    border-radius:8px;
-    padding:16px 18px;
-    height:260px;
-    overflow-y:auto;
-}
-
-/* Buttons */
-.stButton>button {
-    background:#E63946 !important;
-    color:#fff !important;
-    border:none !important;
-    border-radius:6px !important;
-    font-weight:600 !important;
-    height:38px !important;
-    box-shadow:0 0 6px rgba(230,57,70,0.25);
-    transition:all .2s ease-in-out;
-}
-.stButton>button:hover {
-    background:#FF465A !important;
-    box-shadow:0 0 14px rgba(255,70,90,0.45);
-}
-
-/* Inputs */
-textarea, input, select, [data-baseweb="input"], [data-baseweb="textarea"] {
-    background:#1E232B !important;
-    color:#F8F8F8 !important;
-    border:1px solid #2C313A !important;
-    border-radius:6px !important;
-}
-.stSelectbox div[role="combobox"] {
-    background:#1E232B !important;
-    color:#E63946 !important;
-}
-
-/* Alignment */
-.centered {text-align:center;}
+body { background-color:#0D0F12 !important; color:#F8F8F8 !important; }
+hr { border:0; border-top:1px solid #2C313A; }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- INTRO ----------
-if not st.session_state.get("entry_done", False):
+# ---------- SESSION STATE ----------
+if "entry_done" not in st.session_state:
+    st.session_state["entry_done"] = False
+if "threads" not in st.session_state:
+    st.session_state["threads"] = {}
+if "prompt" not in st.session_state:
+    st.session_state["prompt"] = ""
+
+# ---------- INTRO SEQUENCE ----------
+if not st.session_state["entry_done"]:
     st.markdown("""
     <style>
-    @keyframes fadeOut {0%{opacity:1;}90%{opacity:0;}100%{opacity:0;visibility:hidden;}}
-    #boot-seq {animation:fadeOut 1.6s ease-out 3.2s forwards;}
+    @keyframes fadeOut {0%{opacity:1;} 90%{opacity:0;} 100%{opacity:0;display:none;}}
+    @keyframes type {from{width:0} to{width:100%}}
+    body {background:#0D0F12;}
     </style>
-    <div id="boot-seq" style="
-        height:100vh;display:flex;flex-direction:column;
-        justify-content:center;align-items:center;
-        text-align:center;
-        background:radial-gradient(circle at 50% 20%, #11131a 0%, #090a0c 80%);
-        font-family:'Courier New',monospace;">
-        <div style="font-size:42px;color:#E63946;letter-spacing:.10em;
-                    font-weight:800;margin-bottom:12px;">SENTINEL</div>
-        <div style="color:#A8B2BD;font-size:14px;margin-bottom:22px;">
+
+    <div id="boot" style="height:90vh;display:flex;flex-direction:column;
+        justify-content:center;align-items:center;text-align:center;
+        font-family:'Courier New', monospace;animation:fadeOut 1.6s ease-out 3.5s forwards;">
+        <div style="color:#E63946;font-size:42px;letter-spacing:.1em;
+                    font-weight:800;margin-bottom:12px;
+                    border-right:2px solid #E63946;
+                    width:0;overflow:hidden;white-space:nowrap;
+                    animation:type 2.6s steps(24,end) 0.4s forwards;">
+            SENTINEL
+        </div>
+        <div style="color:#A8B2BD;font-size:14px;letter-spacing:.08em;
+                    margin-bottom:22px;margin-top:8px;">
             AUTHENTICATING SESSION…
         </div>
-        <div style="margin-top:10px;color:#9AA6B1;font-size:13px;
-                    text-align:left;line-height:1.7;">
+        <div style="margin-top:10px;color:#9AA6B1;font-size:13px;text-align:left;
+                    line-height:1.6;">
             🛰 INITIALIZING NODES…<br>
-            <span style="color:#48FFF7;">✅ STRATA NODE ONLINE</span><br>
-            <span style="color:#48FFF7;">✅ DEALHAWK NODE ONLINE</span><br>
-            <span style="color:#48FFF7;">✅ NEO NODE ONLINE</span><br>
-            <span style="color:#48FFF7;">✅ PFNG NODE ONLINE</span><br>
-            <span style="color:#48FFF7;">✅ CIPHER SECURE CHANNEL</span>
+            <span style="color:#48FF7F;">✅ STRATA NODE ONLINE</span><br>
+            <span style="color:#48FF7F;">✅ DEALHAWK NODE ONLINE</span><br>
+            <span style="color:#48FF7F;">✅ NEO NODE ONLINE</span><br>
+            <span style="color:#48FF7F;">✅ PFNG NODE ONLINE</span><br>
+            <span style="color:#48FF7F;">✅ CIPHER SECURE CHANNEL</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -105,30 +62,126 @@ if not st.session_state.get("entry_done", False):
 
 # ---------- HEADER ----------
 st.markdown("""
-<div class="centered">
-  <h2 style="margin-bottom:2px;">SENTINEL</h2>
-  <div style="color:#A0A6AD;font-size:14px;">Autonomous Agents for Asymmetric Advantage</div>
+<style>
+@keyframes typing { from { width:0 } to { width:100% } }
+@keyframes caret { 0%,100% { border-color: transparent } 50% { border-color:#E63946 } }
+@keyframes fadeIn { from { opacity:0; transform:translateY(-2px);} to { opacity:1; transform:translateY(0);} }
+
+.typewriter {
+  display:inline-block; white-space:nowrap; overflow:hidden;
+  border-right:2px solid #E63946;
+  font-family:'Courier New', monospace;
+  color:#E63946; font-weight:800;
+  letter-spacing:.10em; font-size:42px;
+  animation: typing 2.6s steps(24,end) 0.2s forwards, caret 1s step-end infinite;
+}
+.subtitle-fade {
+  opacity:0; animation: fadeIn 1.2s ease 2.8s forwards;
+  font-family:'Courier New', monospace;
+  color:#A8B2BD; font-size:15px;
+  letter-spacing:.06em;
+}
+</style>
+
+<div style="text-align:center;margin-top:8px;">
+  <div><span class="typewriter" style="width:0;">SENTINEL</span></div>
+  <div class="subtitle-fade" style="margin-top:8px;">
+    Autonomous Agents for Asymmetric Advantage
+  </div>
 </div>
-<hr style="margin-top:6px;margin-bottom:18px;">
+<hr style="margin-top:14px;margin-bottom:18px;">
 """, unsafe_allow_html=True)
 
-# ---------- AGENT SELECTION ----------
+# ---------- AGENT SELECTOR ----------
+AGENTS = {
+    "strata": "Research & intelligence for energy/decarbonization.",
+    "dealhawk": "Deal sourcing for profitable private companies.",
+    "neo": "Financial modeling and scenario analysis.",
+    "proforma": "Critical review and risk calibration (PFNG).",
+    "cipher": "IC assembly and governance validation."
+}
+AGENT_KEYS = list(AGENTS.keys())
+
+st.markdown("""
+<style>
+div[data-baseweb="select"] div,
+label, .stCaption, div[data-testid="stMarkdownContainer"] p {
+    font-family:'Courier New', monospace !important;
+    color:#A8B2BD !important;
+    letter-spacing:.05em !important;
+}
+div[data-baseweb="select"] > div {
+    background:#1E232B !important;
+    border:1px solid #E63946 !important;
+    border-radius:6px !important;
+}
+div[data-baseweb="select"] svg { color:#E63946 !important; }
+</style>
+""", unsafe_allow_html=True)
+
 col1, col2, col3 = st.columns([1,2,1])
 with col2:
-    agent = st.selectbox("Choose agent", ["strata","dealhawk","neo","proforma","cipher"])
-st.caption("Research & intelligence for energy/decarbonization.")
+    agent = st.selectbox("Choose agent", AGENT_KEYS)
+st.caption(f"⚙ {AGENTS[agent]}")
 
-# ---------- CHAT / RESPONSE WINDOW ----------
-st.markdown('<div class="chat-box">No messages yet.</div>', unsafe_allow_html=True)
+# ---------- CHAT WINDOW ----------
+thread = st.session_state["threads"].get(agent, [])
+if thread:
+    st.markdown("<div style='background:#1E232B;border-radius:8px;"
+                "padding:16px 18px;height:50vh;overflow-y:auto;'>", unsafe_allow_html=True)
+    for msg in thread[-10:]:
+        st.markdown(
+            f"<div style='border-left:3px solid #E63946;padding:8px 10px;"
+            f"margin:6px 0;color:#F8F8F8;font-family:Courier New, monospace;'>"
+            f"<b>{msg['agent'].upper()}</b><br>{msg['response']}"
+            f"<div style='color:#9AA6B1;font-size:11px;margin-top:3px;'>⏱ {msg['time']}</div></div>",
+            unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+else:
+    st.info("No messages yet.")
 
-# ---------- PROMPT BOX ----------
-st.text_area("Type your prompt:", placeholder=f"Ask {agent.capitalize()}…", height=90)
+# ---------- PROMPT AREA ----------
+st.markdown("""
+<style>
+.prompt-label {
+    font-family:'Courier New', monospace !important;
+    color:#A8B2BD !important;
+    font-size:13px !important;
+    letter-spacing:.05em !important;
+    margin-top:10px !important;
+}
+.prompt-helper {
+    font-family:'Courier New', monospace !important;
+    color:#73818C !important;
+    font-size:12px !important;
+    letter-spacing:.04em !important;
+    margin-bottom:6px !important;
+}
+textarea, [data-baseweb="textarea"] {
+    font-family:'Courier New', monospace !important;
+    background:#1E232B !important;
+    color:#F8F8F8 !important;
+    border:1px solid #2C313A !important;
+    border-radius:6px !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# ---------- BUTTON ROW ----------
-bcol1, bcol2, bcol3 = st.columns([1.2,1,1])
-with bcol1:
-    st.button("🔁 Reset Session", use_container_width=True)
-with bcol2:
+st.markdown('<div class="prompt-label">Type your prompt:</div>', unsafe_allow_html=True)
+st.markdown(
+    f'<div class="prompt-helper">Tip: ask {agent.capitalize()} with context — include scope, region, metrics, and time frame for best precision.</div>',
+    unsafe_allow_html=True
+)
+
+user_prompt = st.text_area("", placeholder=f"Ask {agent.capitalize()}…", height=90, label_visibility="collapsed")
+
+# ---------- ACTION BUTTONS ----------
+colA, colB, colC = st.columns([4,2,2])
+with colA:
+    if st.button("🔁 Reset Session", use_container_width=True):
+        st.session_state.clear()
+        st.rerun()
+with colB:
     st.button("💬 Ask Agent", use_container_width=True)
-with bcol3:
-    st.button("➡ Send to DEALHAWK", use_container_width=True)
+with colC:
+    st.button(f"➡ Send to Next", use_container_width=True)
