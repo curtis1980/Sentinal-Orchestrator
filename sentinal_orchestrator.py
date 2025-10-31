@@ -1,128 +1,107 @@
-# sentinal_orchestrator.py — Sentinel Phase 2.0 (Stable)
-# ------------------------------------------------------
-# Adds per-agent personas, rolling memory, rich completions,
-# and GPT-4o fallback for ChatGPT-level output.
-#
-# Usage:
-#   python sentinal_orchestrator.py [agent] [query]
-
-import os, sys, json
+# ============================================
+# Sentinel Console - FastAPI Dashboard
+# ============================================
+import os, subprocess
+from pathlib import Path
+from fastapi import FastAPI, Request, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
-from openai import OpenAI
 from datetime import datetime
 
-# ---------- Setup ----------
+# ---------------- Setup ----------------
 load_dotenv()
-client = OpenAI()
-MODEL = os.getenv("OPENAI_MODEL") or "gpt-4o"
-API_KEY = os.getenv("OPENAI_API_KEY", "")
-if not API_KEY:
-    print("⚠️  OPENAI_API_KEY not found — API calls may fail.\n")
+app = FastAPI(title="Sentinel Console")
+app.add_middleware(SessionMiddleware, secret_key="replace_with_secure_key")
 
-# ---------- Agent Registry & Personas ----------
-AGENTS = {
-    "strata": {
-        "role": "Market Intelligence Analyst",
-        "mission": "Map sectors, subsectors, and themes within energy transition and industrials; identify where to hunt for opportunity."
-    },
-    "dealhawk": {
-        "role": "Deal Sourcing Specialist",
-        "mission": "Find and profile private, profitable North American companies aligned with Longbow’s investment filters."
-    },
-    "neo": {
-        "role": "Financial Modeler",
-        "mission": "Translate qualitative insight into financial scenarios and pro forma models; identify value drivers and sensitivities."
-    },
-    "proforma": {
-        "role": "Critical Review Analyst (PFNG)",
-        "mission": "Rebuild the thesis from first principles; stress-test assumptions; assign Risk Intensity Scores (1–5) and list counterfactuals."
-    },
-    "cipher": {
-        "role": "Governance & IC Compiler",
-        "mission": "Assemble and validate the final Investment Committee packet; ensure logic, risk, and compliance coherence."
-    }
-}
+app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+templates = Jinja2Templates(directory="templates")
 
-# ---------- In-memory storage ----------
-MEMORY = {a: [] for a in AGENTS}
-HANDOFF_CONTEXT = ""
-
-# ---------- Core Call ----------
-def call_agent(agent: str, query: str) -> dict:
-    """Call an agent with context and return structured JSON output."""
-    if agent not in AGENTS:
-        raise ValueError(f"Unknown agent '{agent}'. Valid agents: {', '.join(AGENTS.keys())}")
-
-    persona = AGENTS[agent]
-    print(f"\n🛰️ Routing to agent: {agent.upper()} using model {MODEL}\n")
-
-    # Rolling memory (last 3–4 exchanges)
-    history = MEMORY[agent][-4:]
-    memory_msgs = [{"role": m["role"], "content": m["content"]} for m in history]
-
-    # Persona-based system prompt
-    system_prompt = (
-        f"You are {agent.upper()}, a {persona['role']} within Longbow Capital’s Sentinel platform. "
-        f"Mission: {persona['mission']} "
-        "Respond in detailed analytical prose (Markdown allowed). "
-        "Conclude with a JSON block containing keys: summary, insights, next_steps."
-    )
-
-    messages = [{"role": "system", "content": system_prompt}]
-    messages.extend(memory_msgs)
-    messages.append({"role": "user", "content": query})
-
+# ---------------- Version Manager ----------------
+def safe_update_version_file():
+    """Keeps VERSION file synced with latest git commit (safe auto-increment)."""
+    repo_url = "https://github.com/curtis1980/Sentinel-Orchestrator"
+    version_file = Path("VERSION")
     try:
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=messages,
-            temperature=0.7,
-            top_p=0.9,
-            max_tokens=1500,
-            presence_penalty=0.4,
-            frequency_penalty=0.2,
+        current_version = "v0.1.0"
+        last_commit = None
+        if version_file.exists():
+            raw = version_file.read_text(encoding="utf-8").strip()
+            parts = [p.strip() for p in raw.split("|")]
+            if parts:
+                current_version = parts[0]
+            if len(parts) > 1 and parts[1]:
+                last_commit = parts[1].split("/")[-1]
+
+        latest_commit = (
+            subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL)
+            .decode("utf-8").strip()
         )
-        result = response.choices[0].message.content.strip()
+
+        if latest_commit != last_commit:
+            major, minor, patch = current_version.strip("v").split(".")
+            new_version = f"v{major}.{minor}.{int(patch)+1}"
+            commit_url = f"{repo_url}/commit/{latest_commit}"
+            version_file.write_text(f"{new_version} | {commit_url}", encoding="utf-8")
     except Exception as e:
-        result = f"⚠️ API call failed: {e}"
-        print(result)
-        return {"summary": result, "insights": "", "next_steps": ""}
+        print("⚠️ Version manager failed:", e)
+        if not version_file.exists():
+            version_file.write_text("v0.1.0", encoding="utf-8")
 
-    print(result)
+safe_update_version_file()
 
-    # Store interaction in memory
-    MEMORY[agent].append({"role": "user", "content": query})
-    MEMORY[agent].append({"role": "assistant", "content": result})
+# ---------------- Config ----------------
+APP_PASSWORD = os.getenv("SENTINEL_PASSWORD")
+if not APP_PASSWORD:
+    print("⚠️ SENTINEL_PASSWORD not found. Set it in .env or Render environment.")
 
-    # Try to parse JSON
-    try:
-        json_start = result.find("{")
-        json_part = result[json_start:]
-        parsed = json.loads(json_part)
-    except Exception:
-        parsed = {"summary": result[:800], "insights": "", "next_steps": ""}
+# ---------------- Routes ----------------
+@app.get("/", response_class=HTMLResponse)
+async def login(request: Request):
+    if request.session.get("authenticated"):
+        return RedirectResponse(url="/dashboard")
+    return templates.TemplateResponse("dashboard.html", {"request": request, "auth": False})
 
-    global HANDOFF_CONTEXT
-    HANDOFF_CONTEXT = parsed.get("summary", result)
-    return parsed
+@app.post("/login", response_class=HTMLResponse)
+async def do_login(request: Request, password: str = Form(...)):
+    if APP_PASSWORD and password == APP_PASSWORD:
+        request.session["authenticated"] = True
+        return RedirectResponse(url="/dashboard", status_code=303)
+    context = {"request": request, "auth": False, "error": "Incorrect password"}
+    return templates.TemplateResponse("dashboard.html", context)
 
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    if not request.session.get("authenticated"):
+        return RedirectResponse(url="/")
+    version_file = Path("VERSION")
+    version_label, version_url = "v0.1.0", None
+    if version_file.exists():
+        raw = version_file.read_text(encoding="utf-8").strip()
+        parts = [p.strip() for p in raw.split("|")]
+        if parts:
+            version_label = parts[0]
+        if len(parts) > 1 and parts[1]:
+            version_url = parts[1]
 
-# ---------- CLI Interface ----------
-def main():
-    if len(sys.argv) < 3:
-        print("Usage: python sentinal_orchestrator.py [agent] [query]")
-        sys.exit(1)
+    now = datetime.now().strftime("%I:%M %p")
+    context = {
+        "request": request,
+        "auth": True,
+        "version_label": version_label,
+        "version_url": version_url,
+        "time": now
+    }
+    return templates.TemplateResponse("dashboard.html", context)
 
-    agent = sys.argv[1].lower()
-    query = " ".join(sys.argv[2:])
+@app.get("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/")
 
-    try:
-        result = call_agent(agent, query)
-        print("\n✅ Structured Response:\n")
-        print(json.dumps(result, indent=2))
-    except Exception as e:
-        print(f"\n⚠️ Error: {e}")
-
-
+# ---------------- Run ----------------
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
